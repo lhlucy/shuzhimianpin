@@ -236,6 +236,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         answer.setScore(evaluation.score);
         answer.setFeedback(writeJsonSilently(Map.of(
                 "summary", evaluation.summary,
+                "dimensionScores", evaluation.dimensionScores,
                 "strengths", evaluation.strengths,
                 "weaknesses", evaluation.weaknesses,
                 "suggestions", evaluation.suggestions
@@ -273,6 +274,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 .nextAction(nextAction)
                 .interviewerReply(interviewerReply)
                 .score(evaluation.score)
+                .dimensionScores(evaluation.dimensionScores)
                 .interviewCompleted(completed)
                 .summaryReady(completed)
                 .nextQuestion(nextQuestion == null ? null : toQuestionResponse(nextQuestion, false))
@@ -290,6 +292,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
             JsonNode root = objectMapper.readTree(json);
             AnswerEvaluation evaluation = new AnswerEvaluation();
             evaluation.score = roundToOneDecimal(clampScore(root.path("score").asDouble(60.0)));
+            evaluation.dimensionScores = AIInterviewDimensionModel.parseDimensionScores(root.path("dimensionScores"), evaluation.score);
             evaluation.keywordCoverage = root.path("relevance").asDouble(evaluation.score / 100.0);
             evaluation.tooShort = root.path("tooShort").asBoolean(answerText == null || answerText.trim().length() < 50);
             evaluation.hitKeywords = readStringList(root.path("hitKeywords"));
@@ -313,16 +316,27 @@ public class AIInterviewServiceImpl implements AIInterviewService {
     }
 
     private String buildAnswerEvaluationPrompt(AIInterview interview, AIInterviewQuestion question, String answerText) {
-        return "你正在扮演真实技术面试官，请判断候选人回答是否足以进入下一题。只输出严格 JSON，不要输出额外文字。"
-                + "JSON 结构：{\"canProceed\":布尔值,\"score\":0到100数字,\"relevance\":0到1数字,\"tooShort\":布尔值,"
+        return "你是严格的技术面试评估官。请基于候选人的岗位、技术栈、简历摘要、题目和回答进行多维评估。"
+                + "只输出严格 JSON，不要输出额外文字。"
+                + "JSON 结构：{\"canProceed\":布尔值,\"score\":0到100数字,"
+                + "\"dimensionScores\":{\"technicalDepth\":0到100数字,\"projectRelevance\":0到100数字,"
+                + "\"problemSolving\":0到100数字,\"communicationClarity\":0到100数字,\"jobMatch\":0到100数字},"
+                + "\"relevance\":0到1数字,\"tooShort\":布尔值,"
                 + "\"summary\":\"一句判断\",\"interviewerReply\":\"面试官此刻回复，最多2句话\","
                 + "\"followUpQuestion\":\"如果不能进入下一题，给出一个具体追问；如果可以进入下一题则为空\","
                 + "\"hitKeywords\":[\"...\"],\"missingKeywords\":[\"...\"],\"strengths\":[\"...\"],\"weaknesses\":[\"...\"],\"suggestions\":[\"...\"]}。"
-                + "判断规则：如果候选人答非所问、只寒暄、只有“你好/不会/不知道”等无效回答，canProceed 必须为 false，score 不超过 35。"
-                + "如果回答相关但过短或缺少关键解释，canProceed 为 false，并给出追问。"
-                + "如果回答基本相关且有具体解释，canProceed 为 true。"
+                + "能力维度：technicalDepth=技术深度，考察核心原理、关键机制、边界条件；"
+                + "projectRelevance=项目匹配，考察是否结合真实项目、技术栈和简历经历；"
+                + "problemSolving=问题分析，考察拆解问题、说明思路、对比方案；"
+                + "communicationClarity=表达清晰，考察结构化表达、逻辑连贯、重点明确；"
+                + "jobMatch=岗位匹配，考察回答是否贴合目标岗位要求。"
+                + "评分规则：如果候选人答非所问、只寒暄、只有“你好/不会/不知道”等无效回答，canProceed 必须为 false，score 不超过 35。"
+                + "如果回答相关但过短或缺少关键解释，score 不超过 60，canProceed 为 false，并给出追问。"
+                + "如果回答基本相关且有具体解释，canProceed 为 true；有项目例子、有原理、有取舍分析，score 可超过 80。"
+                + "维度评分必须与总分基本一致，不允许总分高但多数维度低。"
                 + "岗位：" + interview.getTargetPosition()
                 + "；技术栈：" + String.join("、", readJsonList(interview.getSkillTags()))
+                + "；简历摘要：" + buildResumeDigest(interview.getResumeContent())
                 + "；当前题目：" + question.getContent()
                 + "；题目主题：" + blankToEmpty(question.getTopic())
                 + "；候选人回答：" + blankToEmpty(answerText);
@@ -583,6 +597,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         newAssessment.setOverallScore(payload.overallScore);
         newAssessment.setSectionScores(writeJsonSilently(Map.of(
                 "summary", payload.summary,
+                "dimensionScores", payload.dimensionScores,
                 "totalQuestions", safeInt(interview.getQuestionCount()),
                 "answeredQuestions", answers.size()
         )));
@@ -616,6 +631,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
             JsonNode root = objectMapper.readTree(json);
             SummaryPayload payload = new SummaryPayload();
             payload.overallScore = clampScore(root.path("overallScore").asDouble(70.0));
+            payload.dimensionScores = AIInterviewDimensionModel.parseDimensionScores(root.path("dimensionScores"), payload.overallScore);
             payload.summary = root.path("summary").asText("");
             payload.strengths = readStringList(root.path("strengths"));
             payload.weaknesses = readStringList(root.path("weaknesses"));
@@ -627,6 +643,9 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 return null;
             }
             payload.overallScore = roundToOneDecimal(payload.overallScore);
+            if (!AIInterviewDimensionModel.isComplete(payload.dimensionScores)) {
+                payload.dimensionScores = averageDimensionScoresFromAnswers(answerMap.values().stream().collect(Collectors.toList()), payload.overallScore);
+            }
             return payload;
         } catch (Exception ex) {
             log.warn("Generate interview summary failed", ex);
@@ -669,8 +688,12 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                     .append(answer == null ? "未作答" : limitText(answer.getContent(), MAX_TRANSCRIPT_ITEM_LENGTH)).append("\n");
         }
         return "你是技术面试复盘助手。请基于下面的模拟面试记录输出严格 JSON，不要输出任何额外文字。"
-                + "JSON 结构必须为 {\"overallScore\":数字,\"summary\":\"字符串\",\"strengths\":[\"...\"],\"weaknesses\":[\"...\"],\"suggestions\":[\"...\"]}。"
-                + "要求：summary 简洁真实；strengths、weaknesses、suggestions 各输出 2-3 条。"
+                + "JSON 结构必须为 {\"overallScore\":数字,"
+                + "\"dimensionScores\":{\"technicalDepth\":0到100数字,\"projectRelevance\":0到100数字,"
+                + "\"problemSolving\":0到100数字,\"communicationClarity\":0到100数字,\"jobMatch\":0到100数字},"
+                + "\"summary\":\"字符串\",\"strengths\":[\"...\"],\"weaknesses\":[\"...\"],\"suggestions\":[\"...\"]}。"
+                + "五个维度分别是技术深度、项目匹配、问题分析、表达清晰、岗位匹配。"
+                + "要求：overallScore 要与五个维度基本一致；summary 简洁真实；strengths、weaknesses、suggestions 各输出 2-3 条。"
                 + "岗位：" + interview.getTargetPosition()
                 + "；面试语言：" + blankToEmpty(interview.getInterviewLanguage())
                 + "；技术栈：" + String.join("、", readJsonList(interview.getSkillTags()))
@@ -757,6 +780,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 .interviewId(interview.getId())
                 .overallScore(assessment.getOverallScore())
                 .summary(readSummaryText(assessment.getSectionScores()))
+                .dimensionScores(readDimensionScores(assessment.getSectionScores(), assessment.getOverallScore()))
                 .strengths(readJsonList(assessment.getStrengths()))
                 .weaknesses(readJsonList(assessment.getWeaknesses()))
                 .suggestions(readJsonList(assessment.getSuggestions()))
@@ -788,6 +812,8 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 .duration(safeInt(answer.getDuration()))
                 .confidenceLevel(answer.getConfidenceLevel())
                 .feedbackSummary(readObjectText(feedback.get("summary")))
+                .dimensionScores(AIInterviewDimensionModel.parseDimensionScores(feedback.get("dimensionScores"),
+                        answer.getScore() == null ? 0.0 : answer.getScore()))
                 .strengths(readObjectStringList(feedback.get("strengths")))
                 .weaknesses(readObjectStringList(feedback.get("weaknesses")))
                 .suggestions(readObjectStringList(feedback.get("suggestions")))
@@ -804,6 +830,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         overview.put("targetPosition", interview.getTargetPosition());
         overview.put("interviewLanguage", interview.getInterviewLanguage());
         overview.put("overallScore", roundToOneDecimal(assessment.getOverallScore() == null ? 0.0 : assessment.getOverallScore()));
+        overview.put("dimensionScores", readDimensionScores(assessment.getSectionScores(), assessment.getOverallScore()));
         overview.put("averageAnswerScore", roundToOneDecimal(averageAnswerScore));
         overview.put("expressionScore", roundToOneDecimal(expressionScore));
         overview.put("keywordCoverageScore", roundToOneDecimal(keywordCoverageScore));
@@ -1034,6 +1061,30 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         }
     }
 
+    private Map<String, Double> readDimensionScores(String rawJson, Double fallbackScore) {
+        double fallback = fallbackScore == null ? 0.0 : fallbackScore;
+        if (!StringUtils.hasText(rawJson)) {
+            return AIInterviewDimensionModel.defaultScores(fallback);
+        }
+        try {
+            JsonNode node = objectMapper.readTree(rawJson);
+            return AIInterviewDimensionModel.parseDimensionScores(node.path("dimensionScores"), fallback);
+        } catch (Exception ex) {
+            return AIInterviewDimensionModel.defaultScores(fallback);
+        }
+    }
+
+    private Map<String, Double> averageDimensionScoresFromAnswers(List<AIInterviewAnswer> answers, double fallbackScore) {
+        List<Map<String, Double>> scoreItems = answers.stream()
+                .map(answer -> {
+                    Map<String, Object> feedback = readJsonObject(answer.getFeedback());
+                    double fallback = answer.getScore() == null ? fallbackScore : answer.getScore();
+                    return AIInterviewDimensionModel.parseDimensionScores(feedback.get("dimensionScores"), fallback);
+                })
+                .collect(Collectors.toList());
+        return AIInterviewDimensionModel.average(scoreItems, fallbackScore);
+    }
+
     private Map<String, Object> readJsonObject(String rawJson) {
         if (!StringUtils.hasText(rawJson)) {
             return Collections.emptyMap();
@@ -1159,6 +1210,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         private List<String> suggestions;
         private List<String> hitKeywords;
         private List<String> missingKeywords;
+        private Map<String, Double> dimensionScores;
     }
 
     private static class SummaryPayload {
@@ -1167,6 +1219,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         private List<String> strengths;
         private List<String> weaknesses;
         private List<String> suggestions;
+        private Map<String, Double> dimensionScores;
     }
 
     private static class InterviewBlueprint {

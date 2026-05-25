@@ -79,6 +79,7 @@ export interface AIInterviewAnswerResult {
   nextAction: 'FOLLOW_UP' | 'NEXT' | 'END'
   interviewerReply: string
   score: number
+  dimensionScores?: Record<string, number>
   interviewCompleted: boolean
   summaryReady: boolean
   nextQuestion?: AIInterviewQuestion | null
@@ -127,6 +128,7 @@ export interface AIInterviewAvatarSpeakPayload {
 export interface AIInterviewSummary {
   interviewId: number
   overallScore: number
+  dimensionScores?: Record<string, number>
   summary: string
   strengths: string[]
   weaknesses: string[]
@@ -147,6 +149,7 @@ export interface AIInterviewSummary {
     questionContent?: string
     answerContent?: string
     score?: number
+    dimensionScores?: Record<string, number>
     duration?: number
     confidenceLevel?: number
     feedbackSummary?: string

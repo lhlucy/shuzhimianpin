@@ -220,6 +220,26 @@
             <div><span>用时</span><strong>{{ formatDuration(summary.durationSeconds || 0) }}</strong></div>
           </section>
 
+          <section class="dimension-panel">
+            <article class="radar-card">
+              <div class="section-head">
+                <h3>能力雷达</h3>
+                <p>五个岗位能力维度共同解释综合评分来源。</p>
+              </div>
+              <div ref="radarChartRef" class="radar-chart" aria-label="能力维度雷达图"></div>
+            </article>
+            <article class="dimension-card-list">
+              <div v-for="item in dimensionItems" :key="item.key" class="dimension-card">
+                <div>
+                  <span>{{ item.label }}</span>
+                  <strong>{{ Math.round(item.score) }}</strong>
+                </div>
+                <p>{{ item.description }}</p>
+                <i :style="{ width: `${Math.max(4, Math.min(100, item.score))}%` }"></i>
+              </div>
+            </article>
+          </section>
+
           <section class="report-section-grid">
             <article class="report-section-card">
               <h3>优势亮点</h3>
@@ -264,6 +284,16 @@
               </div>
 
               <p v-if="review.feedbackSummary" class="review-summary">{{ review.feedbackSummary }}</p>
+
+              <div v-if="review.dimensionScores" class="review-dimension-row">
+                <span
+                  v-for="item in getReviewDimensionItems(review.dimensionScores)"
+                  :key="`${review.questionId}-${item.key}`"
+                  :class="{ weak: item.score < 65, strong: item.score >= 80 }"
+                >
+                  {{ item.label }} {{ Math.round(item.score) }}
+                </span>
+              </div>
 
               <div class="review-columns">
                 <section>
@@ -399,6 +429,10 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Back, Close, Document, Microphone, Moon, Promotion, Service, Sunny, VideoCamera } from '@element-plus/icons-vue'
+import * as echarts from 'echarts/core'
+import { RadarChart } from 'echarts/charts'
+import { GridComponent, RadarComponent, TooltipComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
 import aiInterviewApi, {
   type AIInterviewAvatarSession,
   type AIInterviewQuestion,
@@ -408,12 +442,29 @@ import aiInterviewApi, {
 import resumeApi, { type UserResume } from '@/api/resumes'
 import AvatarDigitalHumanPlayer from '@/components/AIInterview/AvatarDigitalHumanPlayer.vue'
 
+echarts.use([RadarChart, GridComponent, RadarComponent, TooltipComponent, CanvasRenderer])
+
 interface ChatMessage {
   id: string
   role: 'ai' | 'user'
   title?: string
   content: string
 }
+
+interface DimensionItem {
+  key: string
+  label: string
+  score: number
+  description: string
+}
+
+const DIMENSION_DEFINITIONS: Array<Omit<DimensionItem, 'score'>> = [
+  { key: 'technicalDepth', label: '技术深度', description: '核心原理、关键机制、边界条件' },
+  { key: 'projectRelevance', label: '项目匹配', description: '项目经历、技术栈和岗位场景结合度' },
+  { key: 'problemSolving', label: '问题分析', description: '拆解问题、说明思路、对比方案' },
+  { key: 'communicationClarity', label: '表达清晰', description: '结构化表达、逻辑连贯、重点明确' },
+  { key: 'jobMatch', label: '岗位匹配', description: '回答贴合目标岗位要求的程度' }
+]
 
 const route = useRoute()
 const router = useRouter()
@@ -442,6 +493,7 @@ const activeMainTab = ref<'dialogue' | 'report'>('dialogue')
 const cameraVideoRef = ref<HTMLVideoElement | null>(null)
 const messagesRef = ref<HTMLElement | null>(null)
 const callMessagesRef = ref<HTMLElement | null>(null)
+const radarChartRef = ref<HTMLElement | null>(null)
 const pendingAvatarTexts = ref<string[]>([])
 let startedAt = Date.now()
 let elapsedTimer: number | undefined
@@ -453,6 +505,7 @@ let speechRecognition: any = null
 let keepSpeechRecognitionAlive = false
 let speechRecognitionStarted = false
 let avatarClosingPromise: Promise<void> | null = null
+let radarChart: echarts.ECharts | null = null
 let pageExitHandled = false
 const cameraError = ref('')
 const voiceError = ref('')
@@ -504,6 +557,7 @@ const voiceDisplayText = computed(() => {
   if (merged) return merged
   return recording.value ? '正在聆听，请开始说话...' : '语音已结束，正在生成文字...'
 })
+const dimensionItems = computed(() => getReviewDimensionItems(summary.value?.dimensionScores))
 
 const formatDuration = (seconds?: number) => {
   const totalSeconds = Number(seconds || 0)
@@ -512,6 +566,63 @@ const formatDuration = (seconds?: number) => {
   const minutes = Math.floor(totalSeconds / 60)
   const remainSeconds = totalSeconds % 60
   return remainSeconds ? `${minutes} 分 ${remainSeconds} 秒` : `${minutes} 分钟`
+}
+
+const normalizeDimensionScore = (scores: Record<string, number> | undefined, key: string) => {
+  const fallback = summary.value?.overallScore || 0
+  const score = Number(scores?.[key] ?? fallback)
+  return Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : 0
+}
+
+const getReviewDimensionItems = (scores?: Record<string, number>): DimensionItem[] => {
+  return DIMENSION_DEFINITIONS.map((item) => ({
+    ...item,
+    score: normalizeDimensionScore(scores, item.key)
+  }))
+}
+
+const renderRadarChart = async () => {
+  await nextTick()
+  if (!radarChartRef.value || !summary.value) return
+  if (!radarChart) {
+    radarChart = echarts.init(radarChartRef.value)
+  }
+  const items = dimensionItems.value
+  radarChart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'item',
+      formatter: () => items.map((item) => `${item.label}: ${Math.round(item.score)}`).join('<br/>')
+    },
+    radar: {
+      radius: '68%',
+      center: ['50%', '52%'],
+      indicator: items.map((item) => ({ name: item.label, max: 100 })),
+      splitNumber: 4,
+      axisName: {
+        color: isDark.value ? '#dbe7ff' : '#435064',
+        fontWeight: 800
+      },
+      splitLine: { lineStyle: { color: isDark.value ? 'rgba(177, 196, 226, 0.16)' : 'rgba(67, 80, 100, 0.14)' } },
+      splitArea: { areaStyle: { color: ['rgba(255, 90, 42, 0.04)', 'rgba(65, 110, 230, 0.04)'] } },
+      axisLine: { lineStyle: { color: isDark.value ? 'rgba(177, 196, 226, 0.18)' : 'rgba(67, 80, 100, 0.16)' } }
+    },
+    series: [{
+      type: 'radar',
+      data: [{
+        value: items.map((item) => Number(item.score.toFixed(1))),
+        name: '能力维度',
+        areaStyle: { color: 'rgba(255, 90, 42, 0.22)' },
+        lineStyle: { width: 3, color: '#ff5a2a' },
+        itemStyle: { color: '#ff5a2a' }
+      }]
+    }]
+  })
+  radarChart.resize()
+}
+
+const resizeRadarChart = () => {
+  radarChart?.resize()
 }
 
 const scrollToBottom = async () => {
@@ -1009,12 +1120,23 @@ watch(
   }
 )
 
+watch(
+  [summary, activeMainTab, isDark],
+  () => {
+    if (activeMainTab.value === 'report' && summary.value) {
+      renderRadarChart()
+    }
+  },
+  { deep: true }
+)
+
 onMounted(() => {
   activeMainTab.value = reportMode.value ? 'report' : 'dialogue'
   loadInterview()
   loadResumes()
   window.addEventListener('pagehide', handlePageExit)
   window.addEventListener('beforeunload', handlePageExit)
+  window.addEventListener('resize', resizeRadarChart)
   elapsedTimer = window.setInterval(() => {
     elapsedSeconds.value = Math.floor((Date.now() - startedAt) / 1000)
   }, 1000)
@@ -1028,9 +1150,12 @@ onBeforeRouteLeave(async () => {
 onUnmounted(() => {
   window.removeEventListener('pagehide', handlePageExit)
   window.removeEventListener('beforeunload', handlePageExit)
+  window.removeEventListener('resize', resizeRadarChart)
   if (elapsedTimer) window.clearInterval(elapsedTimer)
   stopCameraPreview()
   stopSpeechRecognition()
+  radarChart?.dispose()
+  radarChart = null
   if (mediaRecorder && recording.value) mediaRecorder.stop()
   void closeAvatarSession()
 })
@@ -2407,6 +2532,83 @@ onUnmounted(() => {
   font-weight: 800;
 }
 
+.dimension-panel {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.94fr) minmax(0, 1.06fr);
+  gap: 14px;
+}
+
+.radar-card,
+.dimension-card {
+  border: 1px solid var(--report-card-border);
+  background: var(--report-card-bg);
+  box-shadow: var(--report-shadow);
+}
+
+.radar-card {
+  min-height: 360px;
+  padding: 18px;
+  display: grid;
+  grid-template-rows: auto minmax(260px, 1fr);
+  gap: 12px;
+  border-radius: 16px;
+}
+
+.radar-chart {
+  width: 100%;
+  min-height: 282px;
+}
+
+.dimension-card-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dimension-card {
+  min-height: 124px;
+  padding: 16px;
+  display: grid;
+  align-content: space-between;
+  gap: 10px;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.dimension-card div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dimension-card span {
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.dimension-card strong {
+  color: var(--accent);
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.dimension-card p {
+  min-height: 38px;
+  color: var(--report-text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.dimension-card i {
+  height: 6px;
+  display: block;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ff5a2a, #416ee6);
+}
+
 .report-section-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2510,6 +2712,35 @@ onUnmounted(() => {
   color: var(--report-text);
   line-height: 1.8;
   white-space: pre-wrap;
+}
+
+.review-dimension-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.review-dimension-row span {
+  min-height: 28px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  color: var(--muted-text);
+  background: var(--report-muted-bg);
+  border: 1px solid var(--report-card-border);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.review-dimension-row span.strong {
+  color: #168052;
+  background: rgba(36, 168, 101, 0.1);
+}
+
+.review-dimension-row span.weak {
+  color: #d3462f;
+  background: rgba(211, 70, 47, 0.1);
 }
 
 .review-columns {
@@ -2663,6 +2894,8 @@ onUnmounted(() => {
 
   .report-hero,
   .report-meta-row,
+  .dimension-panel,
+  .dimension-card-list,
   .report-section-grid,
   .review-columns,
   .keyword-row {

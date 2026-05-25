@@ -17,6 +17,8 @@ public class AIInterviewSummaryResponse {
 
     private String summary;
 
+    private Map<String, Double> dimensionScores;
+
     private List<String> strengths;
 
     private List<String> weaknesses;
@@ -66,6 +68,8 @@ public class AIInterviewSummaryResponse {
         private Integer confidenceLevel;
 
         private String feedbackSummary;
+
+        private Map<String, Double> dimensionScores;
 
         private List<String> strengths;
 
