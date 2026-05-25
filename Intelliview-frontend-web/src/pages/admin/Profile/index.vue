@@ -53,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import Header from '../../../components/Header/index.vue'
 import Footer from '../../../components/Footer/index.vue'
 
@@ -69,10 +69,6 @@ const userInfo = ref({
   bio: '这是管理员用户的个人简介。'
 })
 
-onMounted(() => {
-  // 这里可以从后端获取用户信息
-  console.log('Profile page mounted')
-})
 </script>
 
 <style scoped>

@@ -69,6 +69,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/user/user-rankings', name: 'UserRankings', component: () => import('../pages/user/UserRankings.vue') },
   { path: '/question-bank/:id', name: 'QuestionBankDetail', component: () => import('../pages/user/QuestionBankDetail.vue') },
   { path: '/question/:id', name: 'QuestionDetail', component: () => import('../pages/user/QuestionDetail.vue') },
+  { path: '/privacy', name: 'PrivacyNotice', component: () => import('../pages/PrivacyNotice.vue') },
 
   {
     path: '/login',

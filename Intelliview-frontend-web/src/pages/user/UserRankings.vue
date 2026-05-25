@@ -75,7 +75,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import service from '@/utils/axios'
 import Header from '../../components/Header/index.vue'
 import Footer from '../../components/Footer/index.vue'
 
@@ -116,26 +116,19 @@ const fetchUserRankings = async () => {
   error.value = ''
   
   try {
-    console.log('开始获取用户排名...')
-    const token = localStorage.getItem('token')
     // 使用GET /api/user/rankings接口，获取用户排名
-    const response = await axios.get('/api/user/rankings', {
+    const response: any = await service.get('/api/user/rankings', {
       params: {
         type: 'points',
         page: 0,
         size: 100
-      },
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : ''
       }
     })
     
-    console.log('获取用户排名成功:', response.data)
-    if (response.data.success) {
-      userRankings.value = response.data.data || []
-      console.log('用户排名数据:', userRankings.value)
+    if (response.success) {
+      userRankings.value = response.data || []
     } else {
-      throw new Error(response.data.message || '获取用户排名失败')
+      throw new Error(response.message || '获取用户排名失败')
     }
   } catch (err: any) {
     console.error('获取用户排名失败:', err)

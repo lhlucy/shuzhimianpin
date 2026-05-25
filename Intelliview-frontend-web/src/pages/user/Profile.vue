@@ -190,6 +190,7 @@ import jobRoleApi, { type JobRoleOption } from '@/api/jobRoles'
 import resumeApi, { type UserResume } from '@/api/resumes'
 import userApi, { emptyPracticeStats } from '@/api/user'
 import { authUser, getAvatarInitial, getDisplayName, loadCurrentUser, refreshAuthState, type AuthUser } from '@/utils/auth'
+import { apiBaseUrl } from '@/utils/axios'
 
 const navItems = [
   { label: '首页', path: '/user', icon: House },
@@ -245,7 +246,7 @@ const abilities = computed(() => [
 function assetUrl(value?: string) {
   if (!value) return ''
   if (/^https?:\/\//.test(value)) return value
-  return `http://localhost:8080${value}`
+  return `${apiBaseUrl}${value}`
 }
 
 function percent(value: number, total: number) {

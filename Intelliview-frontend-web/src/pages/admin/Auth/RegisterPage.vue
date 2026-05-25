@@ -156,7 +156,6 @@ function handleRegister() {
       
       // 模拟注册请求
       setTimeout(() => {
-        console.log('注册请求:', registerForm)
         loading.value = false
         
         // 注册成功
@@ -166,7 +165,7 @@ function handleRegister() {
         }, 1500)
       }, 1000)
     } else {
-      console.log('表单验证失败')
+      ElMessage.error('请检查注册信息后重试')
     }
   })
 }

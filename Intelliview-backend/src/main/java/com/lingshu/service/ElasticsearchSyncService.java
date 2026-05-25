@@ -5,6 +5,7 @@ import com.lingshu.entity.Question;
 import com.lingshu.mapper.QuestionMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +14,7 @@ import javax.annotation.PostConstruct;
 import java.util.List;
 
 @Service
+@Profile("!test")
 @RequiredArgsConstructor
 @Slf4j
 public class ElasticsearchSyncService {

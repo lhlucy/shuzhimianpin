@@ -65,7 +65,7 @@ public class ReportController {
      * 获取举报列表（管理员）
      */
     @GetMapping("/admin/list")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<IPage<ReportResponse>>> getReports(
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") Integer page,
@@ -79,7 +79,7 @@ public class ReportController {
      * 处理举报（管理员）
      */
     @PostMapping("/admin/{reportId}/process")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<ReportResponse>> processReport(
             @PathVariable Long reportId,
             @RequestParam String result) {
@@ -94,7 +94,7 @@ public class ReportController {
      * 拒绝举报（管理员）
      */
     @PostMapping("/admin/{reportId}/reject")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<ReportResponse>> rejectReport(
             @PathVariable Long reportId,
             @RequestParam String result) {

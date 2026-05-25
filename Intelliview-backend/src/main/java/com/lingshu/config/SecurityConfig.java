@@ -4,8 +4,10 @@ import com.lingshu.security.JwtAuthFilter;
 import com.lingshu.security.JwtAuthEntryPoint;
 import com.lingshu.security.UserDetailsServiceImpl;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
@@ -20,7 +22,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -31,6 +33,9 @@ public class SecurityConfig {
     private final JwtAuthEntryPoint unauthorizedHandler;
     private final JwtAuthFilter jwtAuthFilter;
     private final UserDetailsServiceImpl userDetailsService;
+
+    @Value("${server.cors.allowed-origins:http://localhost:5173,http://127.0.0.1:5173}")
+    private List<String> allowedOrigins;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -45,12 +50,12 @@ public class SecurityConfig {
                 .and()
                 .authorizeRequests()
                 .antMatchers("/api/auth/**").permitAll()
-                .antMatchers("/api/cloud-knowledge/**").permitAll()
                 .antMatchers("/api/public/**").permitAll()
-                .antMatchers("/api/questions/**").permitAll()
-                .antMatchers("/api/banks/**").permitAll()
-                .antMatchers("/api/users/**").permitAll()
-                .antMatchers("/api/user/**").permitAll()
+                .antMatchers(HttpMethod.GET, "/api/questions/**").permitAll()
+                .antMatchers(HttpMethod.GET, "/api/banks/**").permitAll()
+                .antMatchers(HttpMethod.GET, "/api/job-roles/**").permitAll()
+                .antMatchers(HttpMethod.GET, "/api/tags/**").permitAll()
+                .antMatchers("/uploads/resumes/**").denyAll()
                 .antMatchers("/uploads/**").permitAll()
                 .antMatchers("/h2-console/**").permitAll()
                 .antMatchers("/doc.html").permitAll()
@@ -60,6 +65,11 @@ public class SecurityConfig {
                 .antMatchers("/swagger-ui/**").permitAll()
                 .antMatchers("/v2/api-docs/**").permitAll()
                 .antMatchers("/swagger-ui.html").permitAll()
+                .antMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
+                .antMatchers("/api/user/**").authenticated()
+                .antMatchers("/api/users/**").authenticated()
+                .antMatchers("/api/interviews/ai/**").authenticated()
+                .antMatchers("/api/cloud-knowledge/**").authenticated()
                 .anyRequest().authenticated()
                 .and()
                 .userDetailsService(userDetailsService);
@@ -87,10 +97,11 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("*"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("*"));
-        configuration.setExposedHeaders(Arrays.asList("Authorization"));
+        configuration.setAllowedOrigins(allowedOrigins);
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
+        configuration.setExposedHeaders(List.of("Authorization"));
+        configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

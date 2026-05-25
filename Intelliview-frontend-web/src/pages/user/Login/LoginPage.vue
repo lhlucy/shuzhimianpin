@@ -61,7 +61,7 @@
 
         <div class="auth-footer">
           <p>还没有账号？ <router-link to="/register">免费注册</router-link></p>
-          <small>登录即表示同意用户协议和隐私政策</small>
+          <small>登录即表示同意用户协议和 <router-link to="/privacy">隐私政策</router-link></small>
         </div>
       </section>
     </main>
@@ -129,7 +129,6 @@ const handleLogin = async () => {
       ElMessage.error(response.message || '登录失败')
     }
   } catch (error: any) {
-    console.error('登录失败:', error)
     if (error.response) {
       ElMessage.error(error.response.data?.message || '登录失败，请检查用户名和密码')
     } else if (error.request) {

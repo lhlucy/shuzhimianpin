@@ -66,7 +66,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import service from '@/utils/axios'
 import Header from '../../components/Header/index.vue'
 import Footer from '../../components/Footer/index.vue'
 
@@ -96,25 +96,18 @@ const fetchHotQuestions = async () => {
   error.value = ''
   
   try {
-    console.log('开始获取热门题目...')
-    const token = localStorage.getItem('token')
     // 使用GET /api/questions/hot接口，获取100条热门题目
-    const response = await axios.get('/api/questions/hot', {
+    const response: any = await service.get('/api/questions/hot', {
       params: {
         page: 0,
         size: 100
-      },
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : ''
       }
     })
     
-    console.log('获取热门题目成功:', response.data)
-    if (response.data.success) {
-      hotQuestions.value = response.data.data.records || []
-      console.log('热门题目数据:', hotQuestions.value)
+    if (response.success) {
+      hotQuestions.value = response.data.records || []
     } else {
-      throw new Error(response.data.message || '获取热门题目失败')
+      throw new Error(response.message || '获取热门题目失败')
     }
   } catch (err: any) {
     console.error('获取热门题目失败:', err)

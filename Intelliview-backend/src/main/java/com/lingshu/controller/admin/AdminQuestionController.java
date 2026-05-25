@@ -32,7 +32,7 @@ import java.util.List;
 @RequestMapping("/api/admin/questions")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasRole('ROLE_ADMIN')")
+@PreAuthorize("hasAuthority('ROLE_ADMIN')")
 public class AdminQuestionController {
 
     private final AdminQuestionService questionService;

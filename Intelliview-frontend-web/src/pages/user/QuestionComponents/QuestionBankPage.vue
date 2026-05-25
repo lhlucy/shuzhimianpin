@@ -71,6 +71,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Loading, DocumentRemove } from '@element-plus/icons-vue'
+import service from '@/utils/axios'
 
 const router = useRouter()
 const activeTag = ref('热门')
@@ -92,11 +93,7 @@ const tagButtons = ['热门', '后端', '前端', 'Python', '公司题库', '计
 const fetchBanks = async () => {
   loading.value = true
   try {
-    const response = await fetch('http://localhost:8080/api/banks/list')
-    if (!response.ok) {
-      throw new Error('Failed to fetch banks')
-    }
-    const data = await response.json()
+    const data: any = await service.get('/api/banks/list')
     if (data.success) {
       // 转换后端数据格式
       banks.value = data.data.records.map((bank: any) => ({

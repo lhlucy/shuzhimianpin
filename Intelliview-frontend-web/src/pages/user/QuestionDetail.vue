@@ -197,53 +197,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
-
-// 创建axios实例
-const service = axios.create({
-  baseURL: 'http://localhost:8080', // 后端服务地址
-  timeout: 10000, // 请求超时时间
-  headers: {
-    'Content-Type': 'application/json'
-  }
-})
-
-// 请求拦截器
-service.interceptors.request.use(
-  config => {
-    // 从localStorage获取token
-    const token = localStorage.getItem('token')
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`
-    }
-    console.log('请求配置:', config)
-    return config
-  },
-  error => {
-    console.error('请求错误:', error)
-    return Promise.reject(error)
-  }
-)
-
-// 响应拦截器
-service.interceptors.response.use(
-  response => {
-    const res = response.data
-    console.log('响应数据:', res)
-    return res
-  },
-  error => {
-    console.error('响应错误:', error)
-    console.error('错误详情:', error.response)
-    return Promise.reject(error)
-  }
-)
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Star, Share, StarFilled, View, Microphone, Hide, Link, ChatDotRound, Cellphone } from '@element-plus/icons-vue'
 import Header from '../../components/Header/index.vue'
 import Footer from '../../components/Footer/index.vue'
+import service from '@/utils/axios'
 
 const route = useRoute()
 const router = useRouter()
@@ -412,9 +372,7 @@ const recordPractice = async () => {
       }
     }) as any
     
-    if (response.success) {
-      console.log('刷题记录提交成功:', response)
-    }
+    if (response.success) return
   } catch (err: any) {
     console.error('刷题记录提交失败:', err)
   }
@@ -435,14 +393,11 @@ const formattedContent = computed(() => {
 // 从API获取题目详情
 const fetchQuestion = async () => {
   const questionId = route.params.id as string
-  console.log('获取题目详情，题目ID:', questionId)
   
   loading.value = true
   error.value = ''
   
   try {
-    console.log('发送API请求到:', `/api/questions/detail/${questionId}`)
-    
     // 添加超时处理
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('请求超时，请检查网络连接')), 15000)
@@ -453,13 +408,10 @@ const fetchQuestion = async () => {
       timeoutPromise
     ]) as any
     
-    console.log('获取题目详情成功，响应数据:', response)
-    
     // 检查 response 是否是有效的对象
     if (typeof response === 'object' && response !== null && 'success' in response) {
       if (response.success) {
         question.value = response.data
-        console.log('题目详情数据:', question.value)
         fetchRelatedQuestions(questionId)
         
         // 初始化刷题统计数据
@@ -529,18 +481,11 @@ const toggleLike = async () => {
 
 // 收藏题目
 const toggleFavorite = async () => {
-  console.log('开始收藏操作')
-  if (!question.value) {
-    console.log('题目信息为空')
-    return
-  }
+  if (!question.value) return
   
   try {
-    console.log('获取token')
     const token = localStorage.getItem('token')
-    console.log('token:', token)
     if (!token) {
-      console.log('未登录')
       ElMessage.warning('请先登录')
       return
     }
@@ -548,9 +493,6 @@ const toggleFavorite = async () => {
     // 调用后端API实现收藏/取消收藏
     const endpoint = `/api/favorites/${question.value.id}`
     const method = question.value.isFavorited ? 'delete' : 'post'
-    console.log('收藏操作，方法:', method, '，端点:', endpoint)
-    
-    console.log('发送请求')
     
     // 使用已配置好的service实例发送请求
     let response: any
@@ -559,15 +501,11 @@ const toggleFavorite = async () => {
     } else {
       response = await service.delete(endpoint, { data: {} })
     }
-    console.log('收藏操作响应:', response)
-    
     if (response.success) {
-      console.log('收藏操作成功')
       question.value.isFavorited = !question.value.isFavorited
       question.value.markCount += question.value.isFavorited ? 1 : -1
       ElMessage.success(response.message || (question.value.isFavorited ? '收藏成功' : '取消收藏成功'))
     } else {
-      console.log('收藏操作失败，后端返回错误:', response.message)
       // 处理后端返回的错误
       ElMessage.error(response.message || '操作失败，请稍后重试')
     }
@@ -576,11 +514,9 @@ const toggleFavorite = async () => {
     console.error('错误详情:', err.response)
     // 处理网络错误或其他错误
     if (err.response) {
-      console.log('后端返回错误:', err.response.data)
       // 后端返回的错误
       ElMessage.error(err.response.data.message || '操作失败，请稍后重试')
     } else {
-      console.log('网络错误或其他错误:', err.message)
       // 网络错误或其他错误
       ElMessage.error('网络错误，请检查后端服务是否正常')
     }
@@ -654,7 +590,6 @@ const incrementViewCount = async (questionId: number) => {
     if (response.success && question.value) {
       // 更新本地浏览量
       question.value.viewCount += 1
-      console.log('浏览量增加成功')
     }
   } catch (error: any) {
     console.error('增加浏览量失败:', error)

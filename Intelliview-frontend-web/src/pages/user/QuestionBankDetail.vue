@@ -125,7 +125,6 @@ const goBack = () => {
 }
 
 const viewQuestion = (id: number) => {
-  console.log('查看题目详情，题目ID:', id)
   router.push(`/question/${id}`)
 }
 

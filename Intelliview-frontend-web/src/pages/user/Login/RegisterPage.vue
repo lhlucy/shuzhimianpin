@@ -58,7 +58,7 @@
 
         <div class="auth-footer">
           <p>已有账号？ <router-link to="/login">立即登录</router-link></p>
-          <small>注册即表示同意用户协议和隐私政策</small>
+          <small>注册即表示同意用户协议和 <router-link to="/privacy">隐私政策</router-link></small>
         </div>
       </section>
     </main>
@@ -138,8 +138,8 @@ const handleRegister = async () => {
       router.push('/user')
       loading.value = false
     }, 1000)
-  } catch (error) {
-    console.log('验证失败:', error)
+  } catch (_error) {
+    ElMessage.error('请检查注册信息后重试')
   }
 }
 </script>

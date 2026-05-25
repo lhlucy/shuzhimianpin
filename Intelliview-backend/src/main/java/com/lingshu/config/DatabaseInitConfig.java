@@ -4,6 +4,7 @@ import com.lingshu.entity.User;
 import com.lingshu.mapper.UserMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,6 +12,7 @@ import javax.annotation.PostConstruct;
 import java.time.LocalDateTime;
 
 @Configuration
+@Profile("!test")
 public class DatabaseInitConfig {
 
     @Autowired

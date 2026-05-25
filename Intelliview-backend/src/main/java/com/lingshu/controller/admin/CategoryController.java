@@ -18,7 +18,7 @@ import java.util.List;
 @RequestMapping("/api/admin/categories")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasRole('ROLE_ADMIN')")
+@PreAuthorize("hasAuthority('ROLE_ADMIN')")
 public class CategoryController {
 
     private final CategoryService categoryService;

@@ -267,6 +267,7 @@ import type { UploadFile } from 'element-plus'
 import axios from '@/utils/axios'
 import { MdEditor } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
+import { apiBaseUrl } from '@/utils/axios'
 
 const route = useRoute()
 const router = useRouter()
@@ -646,7 +647,7 @@ const handleImportFileChange = async (uploadFile: UploadFile) => {
 
 const downloadImportTemplate = async () => {
   try {
-    const response = await fetch('http://localhost:8080/api/admin/questions/batch/template', {
+    const response = await fetch(`${apiBaseUrl}/api/admin/questions/batch/template`, {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('token') || ''}`
       }

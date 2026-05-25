@@ -3,7 +3,7 @@ spring:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:intelliview_szmp}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:123456}
+    password: ${DB_PASSWORD:}
 
   jpa:
     hibernate:
@@ -11,7 +11,7 @@ spring:
       naming:
         physical-strategy: org.springframework.boot.orm.jpa.hibernate.SpringPhysicalNamingStrategy
         implicit-strategy: org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy
-    show-sql: true
+    show-sql: ${JPA_SHOW_SQL:false}
     properties:
       hibernate:
         format_sql: true
@@ -31,19 +31,15 @@ spring:
 
 
 github:
-  client-id: ${GITHUB_CLIENT_ID:test-client-id}
-  client-secret: ${GITHUB_CLIENT_SECRET:test-client-secret}
-  redirect-uri: http://localhost:8080/api/auth/github/callback
+  client-id: ${GITHUB_CLIENT_ID:}
+  client-secret: ${GITHUB_CLIENT_SECRET:}
+  redirect-uri: ${GITHUB_REDIRECT_URI:http://localhost:8080/api/auth/github/callback}
 
 # ============【修改】开发环境邮箱配置 ============
 email:
   enabled: true
-  # 这里的from应该与主配置文件一致，或者删除（因为主配置已生效）
-  # 为了清晰，可以保持与主配置一致，但实际会使用主配置的值
-  from: ${MAIL_FROM:${MAIL_USERNAME:}}  # 【请替换】与主配置保持一致
-  mock: false  # 必须为false，进行真实发送
-  # 以下配置已无用，可以删除
-  # admin-emails: admin1@example.com,admin2@example.com
+  from: ${MAIL_FROM:${MAIL_USERNAME:}}
+  mock: ${MAIL_MOCK:false}
 
 app:
   avatar:
