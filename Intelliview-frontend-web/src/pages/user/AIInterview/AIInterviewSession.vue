@@ -659,7 +659,13 @@ const flushAvatarQueue = async () => {
     while (pendingAvatarTexts.value.length && avatarSession.value?.connected) {
       const text = pendingAvatarTexts.value.shift()
       if (!text) continue
-      await aiInterviewApi.speakAvatar(interviewId.value, { text })
+      const spoken = await aiInterviewApi.speakAvatar(interviewId.value, { text })
+      if (!spoken) {
+        avatarSession.value = null
+        avatarError.value = '数字人播报失败，已切换为文字 / 语音面试'
+        pendingAvatarTexts.value = []
+        break
+      }
     }
   } catch (error: any) {
     avatarError.value = error?.message || '数字人播报失败'
@@ -675,13 +681,13 @@ const initAvatarSession = async () => {
     const data = await aiInterviewApi.initAvatarSession(interviewId.value)
     avatarSession.value = data
     if (!data.enabled || !data.connected) {
-      avatarError.value = data.message || '数字人暂未启用'
+      avatarError.value = data.message || '数字人暂未启用，已切换为文字 / 语音面试'
       return
     }
     await flushAvatarQueue()
   } catch (error: any) {
     avatarSession.value = null
-    avatarError.value = error?.message || '数字人连接失败'
+    avatarError.value = error?.message || '数字人连接失败，已切换为文字 / 语音面试'
   } finally {
     avatarLoading.value = false
   }

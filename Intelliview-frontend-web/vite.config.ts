@@ -4,6 +4,19 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [vue()],
+  build: {
+    chunkSizeWarningLimit: 1300,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vue: ['vue', 'vue-router'],
+          element: ['element-plus', '@element-plus/icons-vue'],
+          charts: ['echarts'],
+          editor: ['md-editor-v3', 'markdown-it', 'dompurify']
+        }
+      }
+    }
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src')

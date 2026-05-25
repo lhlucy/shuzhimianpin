@@ -3,6 +3,7 @@ import service from '@/utils/axios'
 const AI_INTERVIEW_TIMEOUT = 30000
 
 export interface AIInterviewCreatePayload {
+  clientRequestId?: string
   interviewName: string
   jobRoleId?: number
   targetPosition: string
@@ -118,6 +119,7 @@ export interface AIInterviewAvatarSession {
   streamUrl?: string
   width?: number
   height?: number
+  fallbackMode?: 'TEXT_VOICE' | string
   message?: string
 }
 

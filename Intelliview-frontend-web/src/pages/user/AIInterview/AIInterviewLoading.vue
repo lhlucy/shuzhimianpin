@@ -124,10 +124,22 @@ const readDraftPayload = () => {
   try {
     const raw = sessionStorage.getItem(draftKey.value)
     if (!raw) return null
-    return JSON.parse(raw) as AIInterviewCreatePayload
+    const payload = JSON.parse(raw) as AIInterviewCreatePayload
+    if (!payload.clientRequestId) {
+      payload.clientRequestId = createClientRequestId()
+      sessionStorage.setItem(draftKey.value, JSON.stringify(payload))
+    }
+    return payload
   } catch {
     return null
   }
+}
+
+const createClientRequestId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `interview-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
 const finishLoading = (interviewId: number) => {

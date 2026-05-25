@@ -33,5 +33,7 @@ public class AIInterviewAvatarSessionResponse {
 
     private Integer height;
 
+    private String fallbackMode;
+
     private String message;
 }

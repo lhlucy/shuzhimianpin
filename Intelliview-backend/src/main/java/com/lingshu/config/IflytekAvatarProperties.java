@@ -52,4 +52,12 @@ public class IflytekAvatarProperties {
     private int initTimeoutMs = 15000;
 
     private int heartbeatSeconds = 5;
+
+    private int maxSessions = 50;
+
+    private int maxSessionsPerUser = 1;
+
+    private int sessionTtlMinutes = 30;
+
+    private int cleanupIntervalSeconds = 60;
 }

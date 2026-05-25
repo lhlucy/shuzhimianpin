@@ -11,6 +11,9 @@ public class AIInterviewCreateRequest {
 
     private Long jobRoleId;
 
+    @Size(max = 64, message = "请求标识不能超过64个字符")
+    private String clientRequestId;
+
     @NotBlank(message = "面试名称不能为空")
     @Size(max = 100, message = "面试名称不能超过100个字符")
     private String interviewName;

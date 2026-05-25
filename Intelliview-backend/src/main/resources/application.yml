@@ -99,6 +99,12 @@ app:
     email-expire-minutes: 10
     email-resend-seconds: 60
     max-attempts-per-ip: 10
+  interview:
+    stability:
+      create-user-limit-per-minute: ${AI_INTERVIEW_CREATE_USER_LIMIT_PER_MINUTE:3}
+      create-global-limit-per-minute: ${AI_INTERVIEW_CREATE_GLOBAL_LIMIT_PER_MINUTE:100}
+      answer-user-limit-per-minute: ${AI_INTERVIEW_ANSWER_USER_LIMIT_PER_MINUTE:20}
+      idempotency-ttl-minutes: ${AI_INTERVIEW_IDEMPOTENCY_TTL_MINUTES:30}
   security:
     password-strength: 6
     login-max-attempts: 5
@@ -154,6 +160,10 @@ app:
       connect-timeout-ms: 10000
       init-timeout-ms: 15000
       heartbeat-seconds: 5
+      max-sessions: ${IFLYTEK_AVATAR_MAX_SESSIONS:50}
+      max-sessions-per-user: ${IFLYTEK_AVATAR_MAX_SESSIONS_PER_USER:1}
+      session-ttl-minutes: ${IFLYTEK_AVATAR_SESSION_TTL_MINUTES:30}
+      cleanup-interval-seconds: ${IFLYTEK_AVATAR_CLEANUP_INTERVAL_SECONDS:60}
 
 # 邮件配置
 email:

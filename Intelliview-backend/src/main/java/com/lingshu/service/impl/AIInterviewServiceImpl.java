@@ -87,11 +87,20 @@ public class AIInterviewServiceImpl implements AIInterviewService {
     private final ResumeParseService resumeParseService;
     private final SecurityUtil securityUtil;
     private final ObjectMapper objectMapper;
+    private final AIInterviewStabilityGuard stabilityGuard;
 
     @Override
     @Transactional
     public AIInterviewResponse createInterview(AIInterviewCreateRequest request) {
         Long userId = securityUtil.getCurrentUserId();
+        AIInterviewResponse reusable = stabilityGuard.findReusableInterview(userId, request.getClientRequestId())
+                .map(this::buildInterviewResponseById)
+                .orElse(null);
+        if (reusable != null) {
+            return reusable;
+        }
+        stabilityGuard.checkCreateRate(userId);
+
         JobRole jobRole = request.getJobRoleId() == null ? null : jobRoleMapper.selectById(request.getJobRoleId());
         List<String> techStacks = normalizeTags(request.getTechStacks(), 12);
 
@@ -137,6 +146,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
             aiInterviewQuestionMapper.insert(question);
         }
 
+        stabilityGuard.rememberCreatedInterview(userId, request.getClientRequestId(), interview.getId());
         return buildInterviewResponse(interview);
     }
 
@@ -241,6 +251,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
     @Transactional
     public AIInterviewAnswerResponse submitAnswer(Long interviewId, Long questionId, AIInterviewAnswerRequest request) {
         AIInterview interview = requireOwnedInterview(interviewId);
+        stabilityGuard.checkAnswerRate(interview.getUserId());
         if (!"IN_PROGRESS".equalsIgnoreCase(interview.getStatus())) {
             throw new BusinessException(ErrorCode.INTERVIEW_STATUS_INVALID.getCode(), "面试未开始或已经结束");
         }
@@ -758,6 +769,14 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 .answeredCount(answers.size())
                 .currentQuestion(nextQuestion == null ? null : toQuestionResponse(nextQuestion, false))
                 .build();
+    }
+
+    private AIInterviewResponse buildInterviewResponseById(Long interviewId) {
+        AIInterview interview = aiInterviewMapper.selectById(interviewId);
+        if (interview == null) {
+            throw new BusinessException(ErrorCode.INTERVIEW_NOT_FOUND.getCode(), "面试不存在");
+        }
+        return buildInterviewResponse(interview);
     }
 
     private AIInterviewHistoryItemResponse toHistoryItemResponse(AIInterview interview) {

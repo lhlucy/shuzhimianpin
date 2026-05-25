@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -59,20 +60,29 @@ public class AIInterviewAvatarServiceImpl implements AIInterviewAvatarService {
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
     private final SecureRandom secureRandom = new SecureRandom();
 
+    @PostConstruct
+    public void startCleanupTask() {
+        scheduler.scheduleAtFixedRate(
+                this::cleanupExpiredSessions,
+                properties.getCleanupIntervalSeconds(),
+                properties.getCleanupIntervalSeconds(),
+                TimeUnit.SECONDS
+        );
+    }
+
     @Override
     public AIInterviewAvatarSessionResponse initSession(Long interviewId) {
         AIInterview interview = requireOwnedInterview(interviewId);
         if (!isConfigured()) {
-            return AIInterviewAvatarSessionResponse.builder()
-                    .enabled(false)
-                    .connected(false)
-                    .width(properties.getWidth())
-                    .height(properties.getHeight())
-                    .message("讯飞数字人未完成配置，请补充 APPID、APIKey、APISecret、服务ID、形象ID 和声音ID")
-                    .build();
+            return fallbackSession("讯飞数字人未完成配置，已自动切换为文字 / 语音面试模式");
         }
 
         String sessionKey = buildSessionKey(interview.getUserId(), interviewId);
+        cleanupExpiredSessions();
+        if (sessions.size() >= properties.getMaxSessions()) {
+            return fallbackSession("当前数字人服务繁忙，已自动切换为文字 / 语音面试模式");
+        }
+        enforceUserSessionLimit(interview.getUserId(), sessionKey);
         stopInternal(sessionKey);
 
         String requestUrl = buildAuthorizedUrl(properties.getWsUrl(), properties.getApiKey(), properties.getApiSecret());
@@ -98,7 +108,7 @@ public class AIInterviewAvatarServiceImpl implements AIInterviewAvatarService {
         } catch (Exception ex) {
             stopInternal(sessionKey);
             log.error("Init iflytek avatar session failed. interviewId={}", interviewId, ex);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "数字人初始化失败，请检查讯飞资源配置");
+            return fallbackSession("数字人初始化失败，已自动切换为文字 / 语音面试模式");
         }
     }
 
@@ -108,7 +118,7 @@ public class AIInterviewAvatarServiceImpl implements AIInterviewAvatarService {
         String sessionKey = buildSessionKey(interview.getUserId(), interviewId);
         AvatarConnection connection = sessions.get(sessionKey);
         if (connection == null || !connection.open) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST.getCode(), "数字人会话未建立，请先初始化");
+            return Boolean.FALSE;
         }
         try {
             connection.readyFuture.get(2, TimeUnit.SECONDS);
@@ -117,7 +127,8 @@ public class AIInterviewAvatarServiceImpl implements AIInterviewAvatarService {
             return Boolean.TRUE;
         } catch (Exception ex) {
             log.warn("Avatar speak failed. interviewId={}", interviewId, ex);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "数字人播报失败，请稍后重试");
+            stopInternal(sessionKey);
+            return Boolean.FALSE;
         }
     }
 
@@ -152,6 +163,7 @@ public class AIInterviewAvatarServiceImpl implements AIInterviewAvatarService {
         if (connection.webSocket == null || !connection.open) {
             throw new IllegalStateException("avatar websocket is not connected");
         }
+        connection.lastActiveAt = System.currentTimeMillis();
         String content = payload.toString();
         log.debug("avatar send: {}", content);
         connection.webSocket.sendText(content, true);
@@ -298,6 +310,42 @@ public class AIInterviewAvatarServiceImpl implements AIInterviewAvatarService {
         }
     }
 
+    private void enforceUserSessionLimit(Long userId, String currentSessionKey) {
+        long activeUserSessions = sessions.values().stream()
+                .filter(connection -> Objects.equals(connection.userId, userId))
+                .filter(connection -> connection.open)
+                .count();
+        if (activeUserSessions < properties.getMaxSessionsPerUser()) {
+            return;
+        }
+        sessions.values().stream()
+                .filter(connection -> Objects.equals(connection.userId, userId))
+                .filter(connection -> !Objects.equals(connection.sessionKey, currentSessionKey))
+                .min((left, right) -> Long.compare(left.createdAt, right.createdAt))
+                .map(connection -> connection.sessionKey)
+                .ifPresent(this::stopInternal);
+    }
+
+    private void cleanupExpiredSessions() {
+        long ttlMillis = TimeUnit.MINUTES.toMillis(Math.max(1, properties.getSessionTtlMinutes()));
+        long now = System.currentTimeMillis();
+        sessions.values().stream()
+                .filter(connection -> now - connection.lastActiveAt > ttlMillis)
+                .map(connection -> connection.sessionKey)
+                .forEach(this::stopInternal);
+    }
+
+    private AIInterviewAvatarSessionResponse fallbackSession(String message) {
+        return AIInterviewAvatarSessionResponse.builder()
+                .enabled(false)
+                .connected(false)
+                .width(properties.getWidth())
+                .height(properties.getHeight())
+                .fallbackMode("TEXT_VOICE")
+                .message(message)
+                .build();
+    }
+
     private boolean isConfigured() {
         return properties.isEnabled()
                 && StringUtils.hasText(properties.getWsUrl())
@@ -440,6 +488,7 @@ public class AIInterviewAvatarServiceImpl implements AIInterviewAvatarService {
 
         @Override
         public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+            connection.lastActiveAt = System.currentTimeMillis();
             textBuffer.append(data);
             if (last) {
                 String text = textBuffer.toString();
@@ -511,6 +560,8 @@ public class AIInterviewAvatarServiceImpl implements AIInterviewAvatarService {
         private volatile String server;
         private volatile String roomId;
         private volatile String timeStr;
+        private final long createdAt = System.currentTimeMillis();
+        private volatile long lastActiveAt = createdAt;
 
         private AvatarConnection(String sessionKey, Long interviewId, Long userId, String frontendUserId) {
             this.sessionKey = sessionKey;
