@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.lingshu.mapper.QuestionBankMapper">
+
+    <!-- 查询题库关联的分类ID列表 -->
+    <select id="selectCategoryIdsByBankId" resultType="java.lang.Long">
+        SELECT category_id 
+        FROM bank_category_relation 
+        WHERE bank_id = #{bankId}
+    </select>
+    
+    <!-- 根据分类ID列表查询题库列表 -->
+    <select id="selectBanksByCategoryIds" resultType="com.lingshu.entity.QuestionBank">
+        SELECT DISTINCT qb.* 
+        FROM question_banks qb
+        JOIN bank_category_relation bcr ON qb.id = bcr.bank_id
+        WHERE bcr.category_id IN
+        <foreach collection="categoryIds" item="categoryId" open="(" separator="," close=")">
+            #{categoryId}
+        </foreach>
+        ORDER BY qb.view_count DESC, qb.created_at DESC
+    </select>
+
+</mapper>

@@ -1,0 +1,404 @@
+/* 主容器 - 自适应布局 */
+.container {
+  display: flex;
+  gap: 24px;
+  padding: 24px;
+  background: #f0f2f5;
+  min-height: calc(100vh - 64px);
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* 主要内容区域 */
+.main {
+  flex: 3;
+  min-width: 0;
+  background: #fff;
+  border-radius: 4px;
+  min-height: 600px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  border: 1px solid #f0f0f0;
+  box-sizing: border-box;
+}
+
+/* 侧边栏区域 */
+.sidebarWrapper {
+  flex: 1;
+  min-width: 300px;
+  max-width: 360px;
+  box-sizing: border-box;
+}
+
+/* 顶部标签栏 */
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+  border-bottom: 1px solid #f0f0f0;
+  flex-wrap: wrap;
+}
+
+.mainTabs {
+  flex: 1;
+  min-width: 300px;
+}
+
+.mainTabs :global(.ant-tabs-nav) {
+  margin-bottom: 0;
+}
+
+.mainTabs :global(.ant-tabs-tab) {
+  padding: 16px 0;
+  margin-right: 32px;
+  font-size: 16px;
+}
+
+.mainTabs :global(.ant-tabs-tab-active) {
+  font-weight: 500;
+}
+
+.settingBtn {
+  margin-left: 16px;
+  flex-shrink: 0;
+}
+
+/* 内容包装器 */
+.contentWrapper {
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+/* 排序头部 */
+.sortHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.sortTabs {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.sortItem {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 15px;
+  color: #595959;
+  padding: 8px 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sortItem:hover {
+  color: #1890ff;
+}
+
+.sortActive {
+  color: #1890ff;
+  font-weight: 500;
+}
+
+.sortActive::after {
+  content: '';
+  position: absolute;
+  bottom: -17px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #1890ff;
+  border-radius: 1px;
+}
+
+.moreLink {
+  color: #8c8c8c;
+  font-size: 14px;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.moreLink:hover {
+  color: #1890ff;
+}
+
+/* 响应式设计 - 修改为更保守的断点 */
+@media (max-width: 1280px) {
+  .container {
+    gap: 20px;
+    padding: 20px;
+  }
+  
+  .sidebarWrapper {
+    min-width: 280px;
+    max-width: 320px;
+  }
+  
+  .mainTabs :global(.ant-tabs-tab) {
+    margin-right: 24px;
+  }
+  
+  .sortTabs {
+    gap: 24px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .container {
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  .main {
+    width: 100%;
+    order: 1;
+  }
+  
+  .sidebarWrapper {
+    width: 100%;
+    min-width: 100%;
+    max-width: 100%;
+    order: 2;
+  }
+  
+  .topBar {
+    padding: 0 20px;
+    padding-bottom: 12px;
+  }
+  
+  .mainTabs :global(.ant-tabs-nav) {
+    width: 100%;
+  }
+  
+  .contentWrapper {
+    padding: 20px;
+  }
+  
+  .sortHeader {
+    padding-bottom: 14px;
+    gap: 14px;
+  }
+  
+  .sortTabs {
+    gap: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+    gap: 16px;
+  }
+  
+  .topBar {
+    padding: 0 16px 12px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
+  .mainTabs {
+    min-width: 100%;
+  }
+  
+  .mainTabs :global(.ant-tabs-nav-wrap) {
+    justify-content: space-around;
+  }
+  
+  .mainTabs :global(.ant-tabs-tab) {
+    margin-right: 0;
+    padding: 12px 8px;
+    font-size: 14px;
+  }
+  
+  .settingBtn {
+    margin-left: 0;
+    width: 100%;
+  }
+  
+  .contentWrapper {
+    padding: 16px;
+  }
+  
+  .sortHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding-bottom: 12px;
+  }
+  
+  .sortTabs {
+    width: 100%;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  
+  .sortItem {
+    flex: 1;
+    justify-content: center;
+    padding: 8px 4px;
+    font-size: 14px;
+  }
+  
+  .sortActive::after {
+    bottom: -13px;
+  }
+  
+  .moreLink {
+    align-self: flex-end;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 12px;
+    gap: 12px;
+  }
+  
+  .topBar {
+    padding: 0 12px 8px;
+  }
+  
+  .mainTabs :global(.ant-tabs-tab) {
+    font-size: 13px;
+    padding: 8px 4px;
+  }
+  
+  .contentWrapper {
+    padding: 12px;
+  }
+  
+  .sortTabs {
+    gap: 8px;
+  }
+  
+  .sortItem {
+    font-size: 13px;
+    padding: 6px 2px;
+  }
+  
+  .sortActive::after {
+    bottom: -11px;
+    height: 1.5px;
+  }
+  
+  .moreLink {
+    font-size: 13px;
+  }
+}
+/* 空状态容器 */
+.emptyContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  padding: 48px 20px;
+  text-align: center;
+}
+
+.emptyIcon {
+  font-size: 64px;
+  margin-bottom: 24px;
+  opacity: 0.4;
+}
+
+.emptyText {
+  font-size: 18px;
+  color: #8c8c8c;
+  margin-bottom: 32px;
+  font-weight: 400;
+}
+
+.uploadButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #1890ff;
+  color: #fff;
+  border: 1px solid #1890ff;
+  padding: 12px 32px;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.uploadButton:hover {
+  background: #40a9ff;
+  border-color: #40a9ff;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
+}
+
+.uploadIcon {
+  font-size: 18px;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .emptyContainer {
+    min-height: 300px;
+    padding: 32px 16px;
+  }
+  
+  .emptyIcon {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+  
+  .emptyText {
+    font-size: 16px;
+    margin-bottom: 24px;
+  }
+  
+  .uploadButton {
+    padding: 10px 24px;
+    font-size: 14px;
+  }
+  
+  .uploadIcon {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .emptyContainer {
+    min-height: 250px;
+    padding: 24px 12px;
+  }
+  
+  .emptyIcon {
+    font-size: 40px;
+    margin-bottom: 12px;
+  }
+  
+  .emptyText {
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+  
+  .uploadButton {
+    padding: 8px 20px;
+    font-size: 13px;
+    gap: 6px;
+  }
+  
+  .uploadIcon {
+    font-size: 14px;
+  }
+}

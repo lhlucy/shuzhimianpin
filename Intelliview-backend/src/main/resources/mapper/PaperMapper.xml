@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lingshu.mapper.PaperMapper">
+    
+    <!-- 分页获取试卷列表 -->
+    <select id="selectPage" resultType="com.lingshu.entity.Paper">
+        SELECT * FROM papers
+        ORDER BY created_at DESC
+    </select>
+    
+    <!-- 根据状态获取试卷列表 -->
+    <select id="selectPageByStatus" resultType="com.lingshu.entity.Paper">
+        SELECT * FROM papers
+        WHERE status = #{status}
+        ORDER BY created_at DESC
+    </select>
+</mapper>

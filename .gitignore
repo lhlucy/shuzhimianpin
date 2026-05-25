@@ -1,0 +1,53 @@
+# Commit rules and local planning notes
+Git 提交信息（Commit Message）规范.md
+
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Build outputs
+dist/
+dist-ssr/
+target/
+build/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.iml
+*.ipr
+*.iws
+
+# Local runtime data and uploads
+uploads/
+Intelliview-backend/uploads/
+Intelliview-backend/logs/
+
+# Local caches
+.cache/
+.m2/
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Local database dumps and archives
+/intelliview_szmp.sql
+*.zip
+
+# Codex / generated migration helper metadata
+.github/java-upgrade/
+.github/modernize/

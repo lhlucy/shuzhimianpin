@@ -1,0 +1,537 @@
+/* 主容器 */
+.container {
+  background: #f0f2f5;
+  min-height: 100vh;
+  padding: 25px;
+}
+
+/* 主要内容区域 */
+.mainContent {
+  display: flex;
+  gap: 20px;
+}
+
+/* 左侧筛选区域 */
+.filterSidebar {
+  width: 280px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  flex-shrink: 0;
+}
+
+.filterItem {
+  margin-bottom: 24px;
+}
+
+.filterLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #333;
+  font-size: 14px;
+}
+
+.filterControl {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.searchInput, .filterInput {
+  width: 100%;
+}
+
+/* 已选标签样式 */
+.selectedTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.selectedTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #e6f7ff;
+  border: 1px solid #91d5ff;
+  border-radius: 12px;
+  padding: 4px 8px 4px 12px;
+  font-size: 12px;
+  color: #1890ff;
+}
+
+.tagRemoveIcon {
+  font-size: 10px;
+  cursor: pointer;
+  color: #8c8c8c;
+}
+
+.tagRemoveIcon:hover {
+  color: #ff4d4f;
+}
+
+.clearAll {
+  font-size: 12px;
+  color: #8c8c8c;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.clearAll:hover {
+  color: #1890ff;
+}
+
+/* 分类标签区域 - Collapse样式 */
+.categorySection {
+  margin: 24px 0;
+  border-top: 1px solid #f0f0f0;
+  padding-top: 16px;
+}
+
+.categoryHeader {
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #333;
+  text-align: center;
+  font-size: 15px;
+}
+
+.categoryCollapse {
+  background: #fff;
+  border: none;
+}
+
+.categoryCollapse :global(.ant-collapse-item) {
+  border-bottom: 1px solid #f0f0f0 !important;
+}
+
+.categoryCollapse :global(.ant-collapse-item):last-child {
+  border-bottom: none !important;
+}
+
+.categoryCollapse :global(.ant-collapse-header) {
+  padding: 12px 0 !important;
+  font-weight: 500;
+  color: #333;
+  font-size: 14px;
+}
+
+.categoryCollapse :global(.ant-collapse-content-box) {
+  padding: 12px 0 !important;
+  padding-top: 0 !important;
+}
+
+.categoryCollapse :global(.ant-collapse-expand-icon) {
+  padding-right: 0 !important;
+}
+
+/* 标签列表 */
+.tagList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tagItem {
+  padding: 8px 12px;
+  background: #f5f5f5;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  color: #595959;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tagItem:hover {
+  background: #f0f0f0;
+}
+
+.tagSelected {
+  background: #e6f7ff !important;
+  border-color: #91d5ff !important;
+  color: #1890ff !important;
+}
+
+/* 筛选标签样式 */
+.filterOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filterTag {
+  cursor: pointer;
+  margin: 0 !important;
+  border: 1px solid #d9d9d9;
+  padding: 4px 12px;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.filterTag:hover {
+  border-color: #1890ff;
+  color: #1890ff;
+}
+
+.tagActive {
+  background: #e6f7ff !important;
+  border-color: #1890ff !important;
+  color: #1890ff !important;
+}
+
+/* 难度选项 */
+.diffOptions {
+  display: flex;
+  gap: 8px;
+}
+
+.diffTag {
+  padding: 4px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  margin: 0 !important;
+  flex: 1;
+  text-align: center;
+}
+
+.diffTag:hover {
+  border-color: #1890ff;
+  color: #1890ff;
+}
+
+.diffSelected {
+  background: #e6f7ff !important;
+  border-color: #1890ff !important;
+  color: #1890ff !important;
+}
+
+/* 右侧内容区域 */
+.rightContent {
+  flex: 1;
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  min-width: 0; /* 防止内容溢出 */
+}
+
+.listHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.sortTabs {
+  display: flex;
+  gap: 24px;
+}
+
+.sortTab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 8px 0;
+  font-size: 14px;
+  color: #595959;
+  cursor: pointer;
+  position: relative;
+}
+
+.sortTab:hover {
+  color: #1890ff;
+}
+
+.sortActive {
+  color: #1890ff;
+  font-weight: 500;
+}
+
+.sortActive::after {
+  content: '';
+  position: absolute;
+  bottom: -17px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #1890ff;
+  border-radius: 1px;
+}
+
+.filters {
+  display: flex;
+  gap: 16px;
+}
+
+.filterCheckbox {
+  font-size: 14px;
+}
+
+.emptyContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  padding: 40px 0;
+}
+
+.emptyIcon {
+  font-size: 64px;
+  margin-bottom: 24px;
+  opacity: 0.4;
+}
+
+.emptyText {
+  font-size: 18px;
+  color: #8c8c8c;
+  margin-bottom: 32px;
+  font-weight: 400;
+}
+
+/* 上传按钮 - 更新为与Home页面一致的样式 */
+.uploadButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #1890ff;
+  color: #fff;
+  border: 1px solid #1890ff;
+  padding: 12px 32px;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.uploadButton:hover {
+  background: #40a9ff;
+  border-color: #40a9ff;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
+}
+
+.uploadIcon {
+  font-size: 18px;
+}
+
+/* 删除旧的按钮样式 */
+.uploadQuestionBtn {
+  display: none;
+}
+
+.filterHint {
+  font-size: 14px;
+  color: #8c8c8c;
+  margin-bottom: 24px;
+  padding: 8px 16px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  max-width: 80%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 分页 */
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+  color: #8c8c8c;
+  font-size: 14px;
+}
+
+/* 表单样式 - 添加上传题目表单的样式 */
+.form {
+  max-width: 100%;
+}
+
+.formRow {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 0;
+}
+
+.formRow .ant-form-item {
+  margin-bottom: 0;
+}
+
+.formActions {
+  text-align: right;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* 响应式设计 - 优化自适应布局 */
+@media (max-width: 1200px) {
+  .filterSidebar {
+    width: 240px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .mainContent {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .filterSidebar {
+    width: 100%;
+    margin-bottom: 0;
+  }
+  
+  .emptyContainer {
+    min-height: 300px;
+    padding: 32px 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 12px;
+  }
+  
+  .filterSidebar,
+  .rightContent {
+    padding: 16px;
+  }
+  
+  .listHeader {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
+  .sortTabs {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .sortTab {
+    flex: 1;
+    justify-content: center;
+    padding: 8px 4px;
+    font-size: 13px;
+  }
+  
+  .sortActive::after {
+    bottom: -13px;
+  }
+  
+  .filters {
+    align-self: flex-end;
+  }
+  
+  .emptyIcon {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+  
+  .emptyText {
+    font-size: 16px;
+    margin-bottom: 24px;
+  }
+  
+  .uploadButton {
+    padding: 10px 24px;
+    font-size: 14px;
+  }
+  
+  .uploadIcon {
+    font-size: 16px;
+  }
+  
+  .formRow {
+    flex-direction: column;
+    gap: 0;
+  }
+  
+  .formRow .ant-form-item {
+    margin-bottom: 16px;
+    margin-right: 0 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 8px;
+  }
+  
+  .mainContent {
+    gap: 12px;
+  }
+  
+  .filterSidebar,
+  .rightContent {
+    padding: 12px;
+  }
+  
+  .filterItem {
+    margin-bottom: 20px;
+  }
+  
+  .categorySection {
+    margin: 20px 0;
+    padding-top: 12px;
+  }
+  
+  .tagItem {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  
+  .emptyContainer {
+    min-height: 250px;
+    padding: 24px 0;
+  }
+  
+  .emptyIcon {
+    font-size: 40px;
+    margin-bottom: 12px;
+  }
+  
+  .emptyText {
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+  
+  .uploadButton {
+    padding: 8px 20px;
+    font-size: 13px;
+    gap: 6px;
+  }
+  
+  .uploadIcon {
+    font-size: 14px;
+  }
+  
+  .filterHint {
+    font-size: 12px;
+    padding: 6px 12px;
+    max-width: 90%;
+  }
+  
+  .pagination {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+}

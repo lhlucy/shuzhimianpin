@@ -1,0 +1,239 @@
+/* auth.css - 登录和注册页面通用样式 */
+
+.auth-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  padding: 20px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 480px;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+  border: none;
+  overflow: hidden;
+}
+
+.auth-card .ant-card-body {
+  padding: 48px;
+}
+
+/* Logo 区域 */
+.logo-section {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.logo {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 20px auto;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1890ff 0%, #722ed1 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 25px rgba(24, 144, 255, 0.3);
+}
+
+.logo-icon {
+  font-size: 40px;
+  color: white;
+}
+
+.title {
+  margin-bottom: 8px !important;
+  color: #262626;
+  font-weight: 600;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: #8c8c8c;
+}
+
+/* 标签页样式 */
+.auth-tabs {
+  margin-bottom: 32px;
+}
+
+.auth-tabs .ant-tabs-nav-wrap {
+  justify-content: center;
+}
+
+.auth-tabs .ant-tabs-tab {
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.auth-tabs .ant-tabs-tab-active {
+  color: #1890ff;
+}
+
+.auth-tabs .ant-tabs-ink-bar {
+  background: #1890ff;
+}
+
+/* 表单样式 */
+.auth-form {
+  width: 100%;
+}
+
+.auth-form .ant-form-item {
+  margin-bottom: 24px;
+}
+
+.auth-form .ant-input-affix-wrapper-lg {
+  border-radius: 8px;
+  border: 1px solid #d9d9d9;
+  transition: all 0.3s;
+}
+
+.auth-form .ant-input-affix-wrapper-lg:hover {
+  border-color: #40a9ff;
+}
+
+.auth-form .ant-input-affix-wrapper-lg:focus,
+.auth-form .ant-input-affix-wrapper-lg-focused {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+}
+
+/* 发送验证码按钮 */
+.send-code-btn {
+  padding: 0 !important;
+  height: auto !important;
+  min-width: 100px;
+}
+
+.send-code-btn:disabled {
+  color: #bfbfbf !important;
+}
+
+/* 表单选项 */
+.form-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.forgot-link {
+  color: #1890ff;
+  font-size: 14px;
+}
+
+.forgot-link:hover {
+  text-decoration: underline;
+}
+
+/* 提交按钮 */
+.submit-btn {
+  height: 48px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  background: linear-gradient(135deg, #1890ff 0%, #722ed1 100%);
+  border: none;
+  transition: all 0.3s;
+}
+
+.submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(24, 144, 255, 0.3);
+}
+
+/* 分隔线 */
+.divider {
+  margin: 32px 0 !important;
+  color: #d9d9d9;
+}
+
+.divider .ant-divider-inner-text {
+  background: white;
+  padding: 0 20px;
+  color: #8c8c8c;
+  font-size: 14px;
+}
+
+/* 注册/登录按钮 */
+.register-btn,
+.login-btn {
+  height: 48px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  border: 2px solid #1890ff;
+  color: #1890ff;
+  background: transparent;
+  transition: all 0.3s;
+}
+
+.register-btn:hover,
+.login-btn:hover {
+  background: rgba(24, 144, 255, 0.05);
+  transform: translateY(-2px);
+}
+
+/* 底部区域 */
+.auth-footer {
+  text-align: center;
+}
+
+.terms {
+  margin-top: 24px;
+  font-size: 14px;
+  color: #8c8c8c;
+}
+
+.terms-link {
+  color: #1890ff;
+  margin: 0 4px;
+}
+
+.terms-link:hover {
+  text-decoration: underline;
+}
+
+/* 返回按钮区域 */
+.back-section {
+  margin-top: 24px;
+}
+
+.back-btn {
+  color: #8c8c8c;
+}
+
+.back-btn:hover {
+  color: #1890ff;
+}
+
+/* 响应式设计 */
+@media (max-width: 576px) {
+  .auth-card .ant-card-body {
+    padding: 32px 24px;
+  }
+  
+  .logo {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .logo-icon {
+    font-size: 30px;
+  }
+  
+  .title {
+    font-size: 20px !important;
+  }
+  
+  .auth-tabs .ant-tabs-tab {
+    padding: 8px 16px;
+    font-size: 14px;
+  }
+}

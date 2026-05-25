@@ -1,0 +1,219 @@
+spring:
+  application:
+    name: lingshu
+  profiles:
+    active: dev
+  # 解决Springfox与Spring Boot 2.7+的兼容性问题
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
+
+  # 数据源配置
+  datasource:
+    url: jdbc:mysql://localhost:3306/intelliview_szmp?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # MyBatis Plus配置
+  mybatis-plus:
+    mapper-locations: classpath:mapper/**/*.xml
+    type-aliases-package: com.lingshu.entity
+    global-config:
+      db-config:
+        id-type: auto
+        logic-delete-field: deleted
+        logic-delete-value: 1
+        logic-not-delete-value: 0
+    configuration:
+      map-underscore-to-camel-case: true
+      log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+  # 163邮箱SMTP配置
+  mail:
+    host: smtp.163.com
+    port: 465
+    username: ${MAIL_USERNAME:}  # 你的163邮箱地址
+    password: ${MAIL_PASSWORD:}     # 你的16位授权码
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+        debug: ${MAIL_DEBUG:false}
+
+  # Redis配置
+  redis:
+    host: localhost
+    port: 6379
+    password:
+    database: 0
+    timeout: 5000
+    lettuce:
+      pool:
+        max-active: 8
+        max-wait: -1ms
+        max-idle: 8
+        min-idle: 0
+  
+  # Elasticsearch配置
+  elasticsearch:
+    enabled: false
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+  cors:
+    allowed-origins: "*"
+    allowed-methods: "*"
+    allowed-headers: "*"
+
+# 自定义配置
+app:
+  jwt:
+    secret: abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/
+    expiration: 86400000
+    refresh-expiration: 604800000
+  captcha:
+    expire-seconds: 300
+  verification:
+    email-expire-minutes: 10
+    email-resend-seconds: 60
+    max-attempts-per-ip: 10
+  security:
+    password-strength: 6
+    login-max-attempts: 5
+    login-lock-minutes: 30
+  llm:
+    aliyun:
+      enabled: true
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      model: qwen3.6-plus
+      # 请通过环境变量 DASHSCOPE_API_KEY 注入真实密钥，避免明文写入仓库。
+      api-key: ${DASHSCOPE_API_KEY:}
+      connect-timeout-ms: 10000
+      read-timeout-ms: 180000
+      app:
+        enabled: true
+        base-url: https://dashscope.aliyuncs.com/api/v1/apps
+        api-key: ${DASHSCOPE_API_KEY:}
+        app-id: ${DASHSCOPE_APP_ID:}
+        connect-timeout-ms: 5000
+        read-timeout-ms: 20000
+      speech:
+        enabled: true
+        api-key: ${DASHSCOPE_API_KEY:}
+        asr-base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+        asr-model: qwen3-asr-flash
+        tts-url: https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer
+        tts-model: cosyvoice-v3-flash
+        chinese-voice: longanyang
+        english-voice: longanyang
+        audio-format: mp3
+        sample-rate: 24000
+        connect-timeout-ms: 5000
+        read-timeout-ms: 30000
+  avatar:
+    iflytek:
+      enabled: true
+      ws-url: ws://avatar.cn-huadong-1.xf-yun.com/v1/interact
+      app-id: ${IFLYTEK_AVATAR_APP_ID:}
+      api-key: ${IFLYTEK_AVATAR_API_KEY:}
+      api-secret: ${IFLYTEK_AVATAR_API_SECRET:}
+      scene-id: ${IFLYTEK_AVATAR_SCENE_ID:}
+      avatar-id: ${IFLYTEK_AVATAR_RESOURCE_ID:}
+      vcn: ${IFLYTEK_AVATAR_VCN:}
+      player-app-id: ${IFLYTEK_AVATAR_PLAYER_APP_ID:1000000001}
+      width: 720
+      height: 1280
+      fps: 25
+      bitrate: 5000
+      alpha: 0
+      speed: 50
+      pitch: 50
+      volume: 50
+      connect-timeout-ms: 10000
+      init-timeout-ms: 15000
+      heartbeat-seconds: 5
+
+# 邮件配置
+email:
+  enabled: true
+  from: ${MAIL_FROM:${MAIL_USERNAME:}}  # 这里要和上面的username一致！
+  from-name: 面试鸭
+  mock: false
+
+  # 邮件主题
+  login-subject: "面试鸭 - 登录验证码"
+  register-subject: "面试鸭 - 注册验证码"
+  reset-password-subject: "面试鸭 - 重置密码验证码"
+
+  # 邮件模板 - 修正了缩进！
+  code-template: |
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: #1890ff; color: white; padding: 20px; text-align: center; }
+            .content { padding: 30px; background: #f9f9f9; }
+            .code {
+                font-size: 32px;
+                font-weight: bold;
+                color: #1890ff;
+                letter-spacing: 5px;
+                text-align: center;
+                margin: 20px 0;
+                padding: 10px;
+                background: white;
+                border: 2px dashed #1890ff;
+                border-radius: 5px;
+            }
+            .footer {
+                margin-top: 30px;
+                padding-top: 20px;
+                border-top: 1px solid #eee;
+                font-size: 12px;
+                color: #999;
+                text-align: center;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>面试鸭</h1>
+            </div>
+            <div class="content">
+                <h2>亲爱的用户：</h2>
+                <p>您正在使用邮箱进行{operation}操作，验证码如下：</p>
+                <div class="code">{code}</div>
+                <p>验证码有效期10分钟，请尽快使用。</p>
+                <p>如非本人操作，请忽略此邮件。</p>
+            </div>
+            <div class="footer">
+                <p>面试鸭刷题平台</p>
+                <p>© 2024 面试鸭 版权所有</p>
+            </div>
+        </div>
+    </body>
+    </html>
+
+# 日志配置
+logging:
+  level:
+    com.lingshu: DEBUG
+    org.springframework.security: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+  file:
+    name: logs/app.log
