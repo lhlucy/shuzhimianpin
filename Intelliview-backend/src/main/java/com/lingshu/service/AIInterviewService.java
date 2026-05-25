@@ -3,6 +3,7 @@ package com.lingshu.service;
 import com.lingshu.dto.request.AIInterviewAnswerRequest;
 import com.lingshu.dto.request.AIInterviewCreateRequest;
 import com.lingshu.dto.response.AIInterviewAnswerResponse;
+import com.lingshu.dto.response.AIInterviewGrowthAnalysisResponse;
 import com.lingshu.dto.response.AIInterviewHistoryItemResponse;
 import com.lingshu.dto.response.AIInterviewQuestionResponse;
 import com.lingshu.dto.response.AIInterviewResumeParseResponse;
@@ -23,6 +24,8 @@ public interface AIInterviewService {
     AIInterviewResponse getInterview(Long interviewId);
 
     List<AIInterviewHistoryItemResponse> listHistory(Integer limit);
+
+    AIInterviewGrowthAnalysisResponse getGrowthAnalysis();
 
     void deleteInterview(Long interviewId);
 

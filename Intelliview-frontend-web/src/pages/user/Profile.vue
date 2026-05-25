@@ -83,6 +83,31 @@
               </div>
             </div>
           </section>
+
+          <section class="growth-card">
+            <div class="panel-head compact">
+              <h2>成长闭环</h2>
+              <small>{{ growthAnalysis?.overallTrend.interviewCount || 0 }} 场样本</small>
+            </div>
+
+            <div class="growth-score">
+              <div>
+                <span>最新综合分</span>
+                <strong>{{ growthAnalysis?.overallTrend.latestScore || 0 }}</strong>
+              </div>
+              <i :class="{ up: scoreChange >= 0, down: scoreChange < 0 }">{{ scoreChangeText }}</i>
+            </div>
+
+            <div class="dimension-list">
+              <article v-for="item in dimensionCards" :key="item.key">
+                <div>
+                  <span>{{ item.name }}</span>
+                  <em>{{ trendText(item.trend) }}</em>
+                </div>
+                <strong>{{ item.latest }}</strong>
+              </article>
+            </div>
+          </section>
         </div>
 
         <section class="resume-card">
@@ -128,6 +153,42 @@
             <span>上传后会解析意向岗位、招聘类型、意向城市和期望薪资</span>
           </div>
         </section>
+      </section>
+
+      <section class="growth-workbench">
+        <div class="panel-head">
+          <h2>成长报告</h2>
+          <router-link to="/user/interview/ai/create">开始新面试</router-link>
+        </div>
+
+        <div class="workbench-grid">
+          <article class="weakness-panel">
+            <h3>高频短板追踪</h3>
+            <div v-if="weaknessCards.length" class="weakness-list">
+              <div v-for="item in weaknessCards" :key="item.keyword">
+                <span :class="`status-${item.status}`">{{ statusText(item.status) }}</span>
+                <strong>{{ item.keyword }}</strong>
+                <p>{{ item.suggestion }}</p>
+                <small>出现 {{ item.occurrences }} 次</small>
+              </div>
+            </div>
+            <div v-else class="empty-growth">
+              <strong>暂无明显短板</strong>
+              <span>完成 AI 模拟面试并生成报告后，这里会持续追踪薄弱点。</span>
+            </div>
+          </article>
+
+          <article class="recommend-panel">
+            <h3>下一步训练建议</h3>
+            <div class="recommend-list">
+              <div v-for="item in recommendationCards" :key="`${item.type}-${item.title}`">
+                <span>{{ item.type === 'QUESTION' ? '专项题目' : '模拟面试' }}</span>
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.reason }}</p>
+              </div>
+            </div>
+          </article>
+        </div>
       </section>
     </main>
 
@@ -186,6 +247,7 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 import aiInterviewApi, { type AIInterviewHistoryItem } from '@/api/aiInterview'
+import type { AIInterviewGrowthAnalysis } from '@/api/aiInterview'
 import jobRoleApi, { type JobRoleOption } from '@/api/jobRoles'
 import resumeApi, { type UserResume } from '@/api/resumes'
 import userApi, { emptyPracticeStats } from '@/api/user'
@@ -204,6 +266,7 @@ const navItems = [
 const profile = ref<AuthUser | null>(authUser.value)
 const practiceStats = ref({ ...emptyPracticeStats })
 const interviewHistory = ref<AIInterviewHistoryItem[]>([])
+const growthAnalysis = ref<AIInterviewGrowthAnalysis | null>(null)
 const resumes = ref<UserResume[]>([])
 const jobRoles = ref<JobRoleOption[]>([])
 const editVisible = ref(false)
@@ -242,6 +305,14 @@ const abilities = computed(() => [
   { label: '面试均分', value: interviewStats.value.averageScore, color: '#26b96d' },
   { label: '等级经验', value: Math.min(100, Number(profile.value?.experience || 0)), color: '#8b48e8' }
 ])
+const scoreChange = computed(() => Number(growthAnalysis.value?.overallTrend.scoreChange || 0))
+const scoreChangeText = computed(() => `${scoreChange.value >= 0 ? '+' : ''}${scoreChange.value}`)
+const dimensionCards = computed(() => (growthAnalysis.value?.dimensionTrends || []).map((item) => ({
+  ...item,
+  latest: item.values.length ? item.values[item.values.length - 1] : 0
+})))
+const weaknessCards = computed(() => growthAnalysis.value?.weaknessTracking || [])
+const recommendationCards = computed(() => growthAnalysis.value?.recommendations || [])
 
 function assetUrl(value?: string) {
   if (!value) return ''
@@ -251,6 +322,25 @@ function assetUrl(value?: string) {
 
 function percent(value: number, total: number) {
   return total > 0 ? Math.round((value / total) * 100) : 0
+}
+
+function trendText(value: string) {
+  const labels: Record<string, string> = {
+    improving: '提升',
+    declining: '回落',
+    stable: '稳定'
+  }
+  return labels[value] || '跟踪'
+}
+
+function statusText(value: string) {
+  const labels: Record<string, string> = {
+    persistent: '持续薄弱',
+    new: '新增薄弱',
+    improved: '已改善',
+    tracking: '持续跟踪'
+  }
+  return labels[value] || '持续跟踪'
 }
 
 function openEdit() {
@@ -341,10 +431,11 @@ async function removeResume(id: number) {
 
 onMounted(async () => {
   refreshAuthState()
-  const [currentProfile, stats, history, resumeList, roles] = await Promise.allSettled([
+  const [currentProfile, stats, history, growth, resumeList, roles] = await Promise.allSettled([
     loadCurrentUser(),
     userApi.getPracticeStats(),
     aiInterviewApi.getInterviewHistory(20),
+    aiInterviewApi.getGrowthAnalysis(),
     resumeApi.listResumes(),
     jobRoleApi.listJobRoles()
   ])
@@ -352,6 +443,7 @@ onMounted(async () => {
   if (currentProfile.status === 'fulfilled') profile.value = currentProfile.value
   if (stats.status === 'fulfilled') practiceStats.value = stats.value
   if (history.status === 'fulfilled') interviewHistory.value = history.value
+  if (growth.status === 'fulfilled') growthAnalysis.value = growth.value
   if (resumeList.status === 'fulfilled') resumes.value = resumeList.value
   if (roles.status === 'fulfilled') jobRoles.value = roles.value
 })
@@ -517,6 +609,7 @@ onMounted(async () => {
 
 .info-card,
 .visual-card,
+.growth-card,
 .resume-card {
   border: 1px solid #e8edf5;
   border-radius: 12px;
@@ -525,7 +618,8 @@ onMounted(async () => {
 }
 
 .info-card,
-.visual-card {
+.visual-card,
+.growth-card {
   padding: 18px;
 }
 
@@ -692,6 +786,182 @@ onMounted(async () => {
   color: #242733;
 }
 
+.growth-score {
+  margin-top: 16px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 8px;
+  background: #f7faf9;
+}
+
+.growth-score span,
+.dimension-list span,
+.weakness-panel h3,
+.recommend-panel h3 {
+  color: #697486;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.growth-score strong {
+  margin-top: 2px;
+  display: block;
+  color: #1f8f5d;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.growth-score i {
+  min-width: 54px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.growth-score i.up {
+  color: #168758;
+  background: #e8f7ef;
+}
+
+.growth-score i.down {
+  color: #bd342c;
+  background: #fff0ee;
+}
+
+.dimension-list {
+  margin-top: 14px;
+  display: grid;
+  gap: 9px;
+}
+
+.dimension-list article {
+  padding: 10px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.dimension-list article:last-child {
+  border-bottom: 0;
+}
+
+.dimension-list div {
+  display: grid;
+  gap: 3px;
+}
+
+.dimension-list em {
+  color: #9da7b9;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.dimension-list strong {
+  color: #242733;
+  font-size: 18px;
+}
+
+.growth-workbench {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid #e8edf5;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(27, 36, 56, 0.025);
+}
+
+.growth-workbench .panel-head a {
+  color: #ff5a2a;
+  font-size: 13px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.workbench-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  gap: 18px;
+}
+
+.weakness-panel,
+.recommend-panel {
+  min-width: 0;
+}
+
+.weakness-list,
+.recommend-list {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.weakness-list div,
+.recommend-list div,
+.empty-growth {
+  padding: 14px;
+  border-radius: 8px;
+  background: #f7f8fb;
+}
+
+.weakness-list span,
+.recommend-list span {
+  display: inline-flex;
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #5d6879;
+  background: #e9edf4;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.weakness-list .status-persistent {
+  color: #bd342c;
+  background: #fff0ee;
+}
+
+.weakness-list .status-new {
+  color: #9b6410;
+  background: #fff6df;
+}
+
+.weakness-list .status-improved {
+  color: #168758;
+  background: #e8f7ef;
+}
+
+.weakness-list strong,
+.recommend-list strong,
+.empty-growth strong {
+  display: block;
+  color: #242733;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.weakness-list p,
+.recommend-list p,
+.empty-growth span {
+  margin-top: 6px;
+  color: #6f7a8d;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.weakness-list small {
+  margin-top: 8px;
+  display: block;
+  color: #a0aabd;
+  font-size: 11px;
+}
+
 .resume-list {
   max-height: 578px;
   overflow: auto;
@@ -806,6 +1076,10 @@ onMounted(async () => {
   }
 
   .content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workbench-grid {
     grid-template-columns: 1fr;
   }
 }

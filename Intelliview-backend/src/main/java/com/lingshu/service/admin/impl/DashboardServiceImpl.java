@@ -1,10 +1,14 @@
 package com.lingshu.service.admin.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lingshu.entity.AIInterviewAssessment;
 import com.lingshu.entity.Paper;
 import com.lingshu.entity.Question;
 import com.lingshu.entity.QuestionBank;
 import com.lingshu.entity.User;
+import com.lingshu.mapper.AIInterviewAssessmentMapper;
 import com.lingshu.mapper.QuestionMapper;
 import com.lingshu.mapper.PaperMapper;
 import com.lingshu.mapper.QuestionBankMapper;
@@ -12,6 +16,7 @@ import com.lingshu.mapper.UserMapper;
 import com.lingshu.service.admin.DashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -33,6 +38,8 @@ public class DashboardServiceImpl implements DashboardService {
     private final PaperMapper paperMapper;
     private final QuestionBankMapper questionBankMapper;
     private final UserMapper userMapper;
+    private final AIInterviewAssessmentMapper aiInterviewAssessmentMapper;
+    private final ObjectMapper objectMapper;
 
     @Override
     public Map<String, Object> getSystemStats() {
@@ -149,6 +156,34 @@ public class DashboardServiceImpl implements DashboardService {
         return distribution;
     }
 
+    @Override
+    public List<Map<String, Object>> getWeaknessTags() {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        List<AIInterviewAssessment> assessments = aiInterviewAssessmentMapper.selectList(
+                new QueryWrapper<AIInterviewAssessment>().orderByDesc("created_at").last("LIMIT 200"));
+
+        for (AIInterviewAssessment assessment : assessments) {
+            for (String weakness : readStringList(assessment.getWeaknesses())) {
+                counts.merge(weakness, 1, Integer::sum);
+            }
+        }
+
+        return counts.entrySet().stream()
+                .sorted((left, right) -> {
+                    int byCount = Integer.compare(right.getValue(), left.getValue());
+                    return byCount != 0 ? byCount : left.getKey().compareTo(right.getKey());
+                })
+                .limit(10)
+                .map(entry -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("keyword", entry.getKey());
+                    item.put("count", entry.getValue());
+                    item.put("suggestion", "建议补充“" + entry.getKey() + "”相关题目与训练案例");
+                    return item;
+                })
+                .toList();
+    }
+
     /**
      * 创建活动记录
      */
@@ -170,6 +205,22 @@ public class DashboardServiceImpl implements DashboardService {
             return number.intValue();
         }
         return Integer.parseInt(Objects.toString(value, "0"));
+    }
+
+    private List<String> readStringList(String rawJson) {
+        if (!StringUtils.hasText(rawJson)) {
+            return List.of();
+        }
+        try {
+            List<String> values = objectMapper.readValue(rawJson, new TypeReference<List<String>>() {});
+            return values.stream()
+                    .filter(StringUtils::hasText)
+                    .map(String::trim)
+                    .distinct()
+                    .toList();
+        } catch (Exception ignored) {
+            return StringUtils.hasText(rawJson) ? List.of(rawJson.trim()) : List.of();
+        }
     }
 
 }

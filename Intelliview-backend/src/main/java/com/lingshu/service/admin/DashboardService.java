@@ -32,4 +32,10 @@ public interface DashboardService {
      */
     Map<String, Integer> getQuestionTypeDistribution();
 
+    /**
+     * 获取 AI 面试高频短板统计
+     * @return 短板标签及出现次数
+     */
+    List<Map<String, Object>> getWeaknessTags();
+
 }

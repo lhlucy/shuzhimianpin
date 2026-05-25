@@ -56,4 +56,13 @@ public class DashboardController {
         return ok(ApiResponse.success(result));
     }
 
+    /**
+     * 获取 AI 面试高频短板统计
+     */
+    @GetMapping("/weakness-tags")
+    public ResponseEntity<ApiResponse<?>> getWeaknessTags() {
+        var result = dashboardService.getWeaknessTags();
+        return ok(ApiResponse.success(result));
+    }
+
 }

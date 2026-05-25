@@ -164,6 +164,28 @@
           <div ref="trendChartRef" class="chart-box short-chart"></div>
         </article>
       </section>
+
+      <section class="overview-grid lower">
+        <article class="panel wide">
+          <div class="panel-head">
+            <div>
+              <h3>热门短板 Top 10</h3>
+              <p>聚合 AI 面试报告中的高频薄弱点，辅助管理员补题和调整训练路径。</p>
+            </div>
+          </div>
+
+          <div class="weakness-admin-list">
+            <template v-if="weaknessTags.length">
+              <div v-for="item in weaknessTags" :key="item.keyword">
+                <strong>{{ item.keyword }}</strong>
+                <span>{{ item.count }} 次</span>
+                <p>{{ item.suggestion }}</p>
+              </div>
+            </template>
+            <el-empty v-else description="暂无短板统计" />
+          </div>
+        </article>
+      </section>
     </template>
 
     <template v-else>
@@ -232,6 +254,24 @@
           </div>
           <div ref="trendChartRef" class="chart-box short-chart"></div>
         </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <h3>热门短板</h3>
+              <p>从 AI 面试报告中统计最近高频薄弱点。</p>
+            </div>
+          </div>
+          <div class="weakness-admin-list compact">
+            <template v-if="weaknessTags.length">
+              <div v-for="item in weaknessTags.slice(0, 6)" :key="item.keyword">
+                <strong>{{ item.keyword }}</strong>
+                <span>{{ item.count }} 次</span>
+              </div>
+            </template>
+            <el-empty v-else description="暂无短板统计" />
+          </div>
+        </article>
       </section>
     </template>
   </div>
@@ -246,7 +286,8 @@ import adminApi, {
   type AdminActivityItem,
   type AdminDashboardStats,
   type AdminInterviewRecord,
-  type AdminJobRoleRecord
+  type AdminJobRoleRecord,
+  type AdminWeaknessTag
 } from '@/api/admin'
 
 const router = useRouter()
@@ -259,6 +300,7 @@ const trendChartRef = ref<HTMLElement>()
 const recentActivities = ref<AdminActivityItem[]>([])
 const interviewRecords = ref<AdminInterviewRecord[]>([])
 const interviewRoles = ref<AdminJobRoleRecord[]>([])
+const weaknessTags = ref<AdminWeaknessTag[]>([])
 const stats = ref<AdminDashboardStats>({
   questionCount: 0,
   paperCount: 0,
@@ -551,13 +593,14 @@ const renderCharts = async () => {
 
 const fetchDashboard = async () => {
   try {
-    const [dashboardStats, activities, difficulty, types, interviews, roles] = await Promise.all([
+    const [dashboardStats, activities, difficulty, types, interviews, roles, weaknesses] = await Promise.all([
       adminApi.getDashboardStats(),
       adminApi.getRecentActivities(),
       adminApi.getDifficultyDistribution(),
       adminApi.getTypeDistribution(),
       adminApi.getInterviewRecords(),
-      adminApi.getInterviewRoles()
+      adminApi.getInterviewRoles(),
+      adminApi.getWeaknessTags()
     ])
 
     stats.value = dashboardStats
@@ -566,6 +609,7 @@ const fetchDashboard = async () => {
     typeStats.value = types
     interviewRecords.value = interviews
     interviewRoles.value = roles
+    weaknessTags.value = weaknesses
     renderCharts()
   } catch (error: any) {
     ElMessage.error(error?.message || '获取后台数据失败')
@@ -785,6 +829,10 @@ onBeforeUnmount(() => {
   padding: 18px;
 }
 
+.wide {
+  grid-column: 1 / -1;
+}
+
 .feature-panel {
   overflow: hidden;
 }
@@ -960,6 +1008,45 @@ onBeforeUnmount(() => {
   font-size: 11px;
 }
 
+.weakness-admin-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.weakness-admin-list.compact {
+  grid-template-columns: 1fr;
+}
+
+.weakness-admin-list div {
+  padding: 14px;
+  border-radius: 18px;
+  background: #f7faff;
+}
+
+.weakness-admin-list strong {
+  color: #173a74;
+  font-size: 14px;
+}
+
+.weakness-admin-list span {
+  float: right;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #8a6510;
+  background: #fff6df;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.weakness-admin-list p {
+  clear: both;
+  margin-top: 8px;
+  color: #647792;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
 @media (max-width: 1180px) {
   .overview-hero,
   .overview-grid {
@@ -995,7 +1082,8 @@ onBeforeUnmount(() => {
   .metric-ribbon,
   .compact-ribbon,
   .analytics-grid,
-  .role-grid {
+  .role-grid,
+  .weakness-admin-list {
     grid-template-columns: 1fr;
   }
 

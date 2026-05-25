@@ -6,6 +6,7 @@ import com.lingshu.dto.request.AIInterviewCreateRequest;
 import com.lingshu.dto.request.AIInterviewSpeechSynthesisRequest;
 import com.lingshu.dto.response.AIInterviewAnswerResponse;
 import com.lingshu.dto.response.AIInterviewAvatarSessionResponse;
+import com.lingshu.dto.response.AIInterviewGrowthAnalysisResponse;
 import com.lingshu.dto.response.AIInterviewHistoryItemResponse;
 import com.lingshu.dto.response.AIInterviewQuestionResponse;
 import com.lingshu.dto.response.AIInterviewResumeParseResponse;
@@ -93,6 +94,11 @@ public class AIInterviewController {
     @GetMapping("/history")
     public ResponseEntity<ApiResponse<List<AIInterviewHistoryItemResponse>>> listHistory(@RequestParam(value = "limit", required = false) Integer limit) {
         return ResponseEntity.ok(ApiResponse.success(aiInterviewService.listHistory(limit)));
+    }
+
+    @GetMapping("/growth-analysis")
+    public ResponseEntity<ApiResponse<AIInterviewGrowthAnalysisResponse>> getGrowthAnalysis() {
+        return ResponseEntity.ok(ApiResponse.success(aiInterviewService.getGrowthAnalysis()));
     }
 
     @DeleteMapping("/{interviewId}")

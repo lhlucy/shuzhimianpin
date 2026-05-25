@@ -162,6 +162,36 @@ export interface AIInterviewSummary {
   completedAt: string
 }
 
+export interface AIInterviewGrowthAnalysis {
+  overallTrend: {
+    averageScore: number
+    latestScore: number
+    scoreChange: number
+    labels: string[]
+    scoreTrend: number[]
+    interviewCount: number
+  }
+  dimensionTrends: Array<{
+    key: string
+    name: string
+    trend: 'improving' | 'declining' | 'stable'
+    values: number[]
+    labels: string[]
+  }>
+  weaknessTracking: Array<{
+    keyword: string
+    status: 'persistent' | 'new' | 'improved' | 'tracking'
+    occurrences: number
+    suggestion: string
+  }>
+  recommendations: Array<{
+    type: 'QUESTION' | 'INTERVIEW' | string
+    title: string
+    reason: string
+    relatedQuestionIds: number[]
+  }>
+}
+
 const aiInterviewApi = {
   async createInterview(payload: AIInterviewCreatePayload) {
     const response = await service.post('/api/interviews/ai/personalized', payload, {
@@ -259,6 +289,13 @@ const aiInterviewApi = {
       params: { limit }
     })
     return response.data as AIInterviewHistoryItem[]
+  },
+
+  async getGrowthAnalysis() {
+    const response = await service.get('/api/interviews/ai/growth-analysis', {
+      timeout: AI_INTERVIEW_TIMEOUT
+    })
+    return response.data as AIInterviewGrowthAnalysis
   },
 
   async deleteInterview(interviewId: number) {

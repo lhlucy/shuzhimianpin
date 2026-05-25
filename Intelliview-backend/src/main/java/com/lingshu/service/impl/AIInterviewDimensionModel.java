@@ -90,6 +90,10 @@ final class AIInterviewDimensionModel {
         return KEYS.stream().allMatch(key -> scores.get(key) != null);
     }
 
+    static List<String> keys() {
+        return KEYS;
+    }
+
     static String labelOf(String key) {
         if (!StringUtils.hasText(key)) {
             return "";

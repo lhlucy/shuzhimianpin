@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lingshu.dto.request.AIInterviewAnswerRequest;
 import com.lingshu.dto.request.AIInterviewCreateRequest;
 import com.lingshu.dto.response.AIInterviewAnswerResponse;
+import com.lingshu.dto.response.AIInterviewGrowthAnalysisResponse;
 import com.lingshu.dto.response.AIInterviewHistoryItemResponse;
 import com.lingshu.dto.response.AIInterviewQuestionResponse;
 import com.lingshu.dto.response.AIInterviewResumeParseResponse;
@@ -50,10 +51,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -69,6 +72,8 @@ public class AIInterviewServiceImpl implements AIInterviewService {
 
     private static final int MAX_RESUME_CONTENT_LENGTH = 12000;
     private static final int MAX_TRANSCRIPT_ITEM_LENGTH = 600;
+    private static final int GROWTH_ANALYSIS_LIMIT = 10;
+    private static final DateTimeFormatter GROWTH_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MM-dd");
 
     private final AIInterviewMapper aiInterviewMapper;
     private final AIInterviewQuestionMapper aiInterviewQuestionMapper;
@@ -189,6 +194,33 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         return aiInterviewMapper.selectList(wrapper).stream()
                 .map(this::toHistoryItemResponse)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public AIInterviewGrowthAnalysisResponse getGrowthAnalysis() {
+        Long userId = securityUtil.getCurrentUserId();
+        LambdaQueryWrapper<AIInterview> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AIInterview::getUserId, userId)
+                .eq(AIInterview::getStatus, "COMPLETED")
+                .orderByDesc(AIInterview::getEndedAt)
+                .orderByDesc(AIInterview::getUpdatedAt)
+                .last("LIMIT " + GROWTH_ANALYSIS_LIMIT);
+
+        List<AIInterview> interviews = aiInterviewMapper.selectList(wrapper).stream()
+                .sorted(Comparator.comparing(item -> item.getEndedAt() == null ? item.getUpdatedAt() : item.getEndedAt(),
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .collect(Collectors.toList());
+
+        List<GrowthInterviewSnapshot> snapshots = interviews.stream()
+                .map(this::toGrowthSnapshot)
+                .collect(Collectors.toList());
+
+        return AIInterviewGrowthAnalysisResponse.builder()
+                .overallTrend(buildOverallTrend(snapshots))
+                .dimensionTrends(buildDimensionTrends(snapshots))
+                .weaknessTracking(buildWeaknessTracking(snapshots))
+                .recommendations(buildTrainingRecommendations(snapshots))
+                .build();
     }
 
     @Override
@@ -746,6 +778,177 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 .build();
     }
 
+    private GrowthInterviewSnapshot toGrowthSnapshot(AIInterview interview) {
+        AIInterviewAssessment assessment = aiInterviewAssessmentMapper.selectByInterviewId(interview.getId());
+        double score = assessment != null && assessment.getOverallScore() != null
+                ? assessment.getOverallScore()
+                : (interview.getTotalScore() == null ? 0.0 : interview.getTotalScore());
+        Map<String, Double> dimensionScores = assessment == null
+                ? AIInterviewDimensionModel.defaultScores(score)
+                : readDimensionScores(assessment.getSectionScores(), score);
+
+        List<String> weaknesses = new ArrayList<>();
+        if (assessment != null) {
+            weaknesses.addAll(readJsonList(assessment.getWeaknesses()));
+        }
+
+        List<Long> missingQuestionIds = new ArrayList<>();
+        for (AIInterviewAnswer answer : aiInterviewAnswerMapper.selectByInterviewId(interview.getId())) {
+            Map<String, Object> keywordAnalysis = readJsonObject(answer.getKeywordAnalysis());
+            List<String> missingKeywords = readObjectStringList(keywordAnalysis.get("missingKeywords"));
+            if (!missingKeywords.isEmpty()) {
+                weaknesses.addAll(missingKeywords);
+                if (answer.getQuestionId() != null) {
+                    missingQuestionIds.add(answer.getQuestionId());
+                }
+            }
+        }
+
+        LocalDateTime completedAt = interview.getEndedAt() == null ? interview.getUpdatedAt() : interview.getEndedAt();
+        return new GrowthInterviewSnapshot(interview.getId(), score, dimensionScores,
+                normalizeTags(weaknesses, 20), missingQuestionIds, completedAt);
+    }
+
+    private AIInterviewGrowthAnalysisResponse.OverallTrend buildOverallTrend(List<GrowthInterviewSnapshot> snapshots) {
+        List<Double> scores = snapshots.stream()
+                .map(item -> roundToOneDecimal(item.score))
+                .collect(Collectors.toList());
+        List<String> labels = snapshots.stream()
+                .map(item -> item.completedAt == null ? "未知" : item.completedAt.format(GROWTH_LABEL_FORMATTER))
+                .collect(Collectors.toList());
+        double average = scores.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+        double latest = scores.isEmpty() ? 0.0 : scores.get(scores.size() - 1);
+        double first = scores.isEmpty() ? 0.0 : scores.get(0);
+        return AIInterviewGrowthAnalysisResponse.OverallTrend.builder()
+                .averageScore(roundToOneDecimal(average))
+                .latestScore(roundToOneDecimal(latest))
+                .scoreChange(roundToOneDecimal(latest - first))
+                .labels(labels)
+                .scoreTrend(scores)
+                .interviewCount(snapshots.size())
+                .build();
+    }
+
+    private List<AIInterviewGrowthAnalysisResponse.DimensionTrend> buildDimensionTrends(List<GrowthInterviewSnapshot> snapshots) {
+        return AIInterviewDimensionModel.keys().stream()
+                .map(key -> {
+                    List<Double> values = snapshots.stream()
+                            .map(item -> roundToOneDecimal(item.dimensionScores.getOrDefault(key, item.score)))
+                            .collect(Collectors.toList());
+                    List<String> labels = snapshots.stream()
+                            .map(item -> item.completedAt == null ? "未知" : item.completedAt.format(GROWTH_LABEL_FORMATTER))
+                            .collect(Collectors.toList());
+                    return AIInterviewGrowthAnalysisResponse.DimensionTrend.builder()
+                            .key(key)
+                            .name(AIInterviewDimensionModel.labelOf(key))
+                            .trend(resolveTrend(values))
+                            .values(values)
+                            .labels(labels)
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    private List<AIInterviewGrowthAnalysisResponse.WeaknessTracking> buildWeaknessTracking(List<GrowthInterviewSnapshot> snapshots) {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        Map<String, Integer> latestIndex = new HashMap<>();
+        for (int i = 0; i < snapshots.size(); i++) {
+            for (String keyword : snapshots.get(i).weaknesses) {
+                counts.merge(keyword, 1, Integer::sum);
+                latestIndex.put(keyword, i);
+            }
+        }
+
+        return counts.entrySet().stream()
+                .sorted((left, right) -> {
+                    int byCount = Integer.compare(right.getValue(), left.getValue());
+                    return byCount != 0 ? byCount : left.getKey().compareTo(right.getKey());
+                })
+                .limit(8)
+                .map(entry -> AIInterviewGrowthAnalysisResponse.WeaknessTracking.builder()
+                        .keyword(entry.getKey())
+                        .occurrences(entry.getValue())
+                        .status(resolveWeaknessStatus(entry.getValue(), latestIndex.getOrDefault(entry.getKey(), -1), snapshots.size()))
+                        .suggestion(buildWeaknessSuggestion(entry.getKey()))
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    private List<AIInterviewGrowthAnalysisResponse.TrainingRecommendation> buildTrainingRecommendations(List<GrowthInterviewSnapshot> snapshots) {
+        List<AIInterviewGrowthAnalysisResponse.WeaknessTracking> weaknesses = buildWeaknessTracking(snapshots);
+        List<AIInterviewGrowthAnalysisResponse.TrainingRecommendation> recommendations = weaknesses.stream()
+                .limit(5)
+                .map(item -> AIInterviewGrowthAnalysisResponse.TrainingRecommendation.builder()
+                        .type("QUESTION")
+                        .title(item.getKeyword())
+                        .reason(item.getOccurrences() >= 2
+                                ? "该短板在多次面试中重复出现，建议优先补齐"
+                                : "最近一次面试暴露该短板，适合立即安排专项练习")
+                        .relatedQuestionIds(findRelatedQuestionIds(snapshots, item.getKeyword()))
+                        .build())
+                .collect(Collectors.toList());
+
+        if (recommendations.isEmpty()) {
+            recommendations.add(AIInterviewGrowthAnalysisResponse.TrainingRecommendation.builder()
+                    .type("INTERVIEW")
+                    .title("继续完成一次岗位化模拟面试")
+                    .reason("当前可分析样本较少，完成更多面试后趋势判断会更稳定")
+                    .relatedQuestionIds(Collections.emptyList())
+                    .build());
+        }
+        return recommendations;
+    }
+
+    private List<Long> findRelatedQuestionIds(List<GrowthInterviewSnapshot> snapshots, String keyword) {
+        if (!StringUtils.hasText(keyword)) {
+            return Collections.emptyList();
+        }
+        return snapshots.stream()
+                .filter(item -> item.weaknesses.contains(keyword))
+                .flatMap(item -> item.relatedQuestionIds.stream())
+                .distinct()
+                .limit(3)
+                .collect(Collectors.toList());
+    }
+
+    private String resolveTrend(List<Double> values) {
+        if (values.size() < 2) {
+            return "stable";
+        }
+        double first = values.get(0);
+        double latest = values.get(values.size() - 1);
+        if (latest - first >= 5.0) {
+            return "improving";
+        }
+        if (first - latest >= 5.0) {
+            return "declining";
+        }
+        return "stable";
+    }
+
+    private String resolveWeaknessStatus(int occurrences, int latestIndex, int total) {
+        if (total <= 0) {
+            return "new";
+        }
+        if (occurrences >= 3 && latestIndex >= total - 3) {
+            return "persistent";
+        }
+        if (latestIndex == total - 1 && occurrences == 1) {
+            return "new";
+        }
+        if (latestIndex <= total - 3) {
+            return "improved";
+        }
+        return "tracking";
+    }
+
+    private String buildWeaknessSuggestion(String keyword) {
+        if (!StringUtils.hasText(keyword)) {
+            return "建议结合最近面试报告补充专项练习。";
+        }
+        return "建议优先练习“" + keyword + "”相关题目，并在回答中补充原理、项目场景和取舍分析。";
+    }
+
     private AIInterviewSummaryResponse toSummaryResponse(AIInterview interview, AIInterviewAssessment assessment) {
         List<AIInterviewQuestion> questions = aiInterviewQuestionMapper.selectByInterviewId(interview.getId());
         List<AIInterviewAnswer> answers = aiInterviewAnswerMapper.selectByInterviewId(interview.getId());
@@ -1234,5 +1437,24 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         private String topic;
         private int estimatedTime;
         private List<String> focus = new ArrayList<>();
+    }
+
+    private static class GrowthInterviewSnapshot {
+        private final Long interviewId;
+        private final double score;
+        private final Map<String, Double> dimensionScores;
+        private final List<String> weaknesses;
+        private final List<Long> relatedQuestionIds;
+        private final LocalDateTime completedAt;
+
+        private GrowthInterviewSnapshot(Long interviewId, double score, Map<String, Double> dimensionScores,
+                                        List<String> weaknesses, List<Long> relatedQuestionIds, LocalDateTime completedAt) {
+            this.interviewId = interviewId;
+            this.score = score;
+            this.dimensionScores = dimensionScores;
+            this.weaknesses = weaknesses;
+            this.relatedQuestionIds = relatedQuestionIds;
+            this.completedAt = completedAt;
+        }
     }
 }

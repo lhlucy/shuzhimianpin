@@ -15,6 +15,12 @@ export interface AdminActivityItem {
   time?: string
 }
 
+export interface AdminWeaknessTag {
+  keyword: string
+  count: number
+  suggestion?: string
+}
+
 export interface AdminUser {
   id?: number
   username: string
@@ -106,6 +112,11 @@ const adminApi = {
   async getTypeDistribution() {
     const response = await service.get('/api/admin/dashboard/stats/questions/type')
     return unwrap<Record<string, number>>(response, {})
+  },
+
+  async getWeaknessTags() {
+    const response = await service.get('/api/admin/dashboard/weakness-tags')
+    return unwrap<AdminWeaknessTag[]>(response, [])
   },
 
   async getUsers(keyword?: string) {
