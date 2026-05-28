@@ -213,6 +213,7 @@ import {
   Setting,
   Star,
   StarFilled,
+  TrendCharts,
   User
 } from '@element-plus/icons-vue'
 import { useRoleBanks } from '@/data/interviewData'
@@ -245,10 +246,11 @@ const navItems = [
   { label: '模拟面试', path: '/user/interview/ai/create', icon: Monitor },
   { label: '历史记录', path: '/user/history', icon: Clock },
   { label: '我的收藏', path: '/user/favorites', icon: Star },
+  { label: '成长中心', path: '/user/growth', icon: TrendCharts },
   { label: '个人中心', path: '/user/profile', icon: User }
 ]
 
-const categories = ['全部', '后端开发', '前端开发', '算法/AI', '运维/大数据']
+const categories = ['全部', '后端开发', '前端开发', '算法/AI', '数据岗位', '云原生/运维', '安全/测试', '移动/嵌入式', '产品岗位']
 const searchText = ref('')
 const questionSearch = ref('')
 const activeCategory = ref('全部')
@@ -260,14 +262,46 @@ const shortNameMap: Record<string, string> = {
   java_backend: 'Java',
   frontend: 'FE',
   python: 'Py',
-  algorithm: 'AI'
+  algorithm: 'AI',
+  ai_large_model: '大模',
+  mlops_engineer: 'ML',
+  data_engineer: '数据',
+  data_analyst: '分析',
+  bi_engineer: 'BI',
+  cloud_native: '云',
+  devops_sre: 'SRE',
+  cybersecurity: '安全',
+  fullstack: '全栈',
+  go_backend: 'Go',
+  c_cpp: 'C++',
+  mobile: '移动',
+  qa_test: '测试',
+  database_dba: 'DBA',
+  embedded_iot: 'IoT',
+  product_tech: '产品'
 }
 
 const groupMap: Record<string, string> = {
   java_backend: '后端开发',
   frontend: '前端开发',
   python: '后端开发',
-  algorithm: '算法/AI'
+  algorithm: '算法/AI',
+  ai_large_model: '算法/AI',
+  mlops_engineer: '算法/AI',
+  data_engineer: '数据岗位',
+  data_analyst: '数据岗位',
+  bi_engineer: '数据岗位',
+  cloud_native: '云原生/运维',
+  devops_sre: '云原生/运维',
+  cybersecurity: '安全/测试',
+  qa_test: '安全/测试',
+  fullstack: '后端开发',
+  go_backend: '后端开发',
+  c_cpp: '后端开发',
+  mobile: '移动/嵌入式',
+  embedded_iot: '移动/嵌入式',
+  database_dba: '数据岗位',
+  product_tech: '产品岗位'
 }
 
 const roleCards = computed(() =>
@@ -647,6 +681,7 @@ onMounted(async () => {
 .role-page {
   margin-left: 200px;
   padding: 38px 38px 64px;
+  max-width: 1680px;
 }
 
 .role-hero h1 {
@@ -699,18 +734,17 @@ onMounted(async () => {
 }
 
 .role-grid {
-  max-width: 980px;
   margin-top: 30px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(280px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(4, minmax(210px, 1fr));
+  gap: 18px;
 }
 
 .role-card {
-  min-height: 164px;
-  padding: 24px;
+  min-height: 156px;
+  padding: 22px;
   display: grid;
-  gap: 22px;
+  gap: 20px;
   border: 1px solid #e8edf5;
   border-radius: 12px;
   background: #ffffff;
@@ -727,7 +761,7 @@ onMounted(async () => {
 
 .role-card-top {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) 22px;
+  grid-template-columns: 48px minmax(0, 1fr) 18px;
   align-items: center;
   gap: 14px;
 }
@@ -744,8 +778,9 @@ onMounted(async () => {
 
 .role-card h2 {
   color: #242733;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 900;
+  line-height: 1.35;
 }
 
 .role-card-top span {
@@ -775,15 +810,15 @@ onMounted(async () => {
 .role-meta {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
   color: #99a3b5;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .role-meta button {
   margin-left: auto;
   height: 30px;
-  padding: 0 14px;
+  padding: 0 12px;
   border: none;
   border-radius: 6px;
   color: #ff5a2a;
@@ -1328,6 +1363,18 @@ onMounted(async () => {
     max-height: none;
     border-right: none;
     border-bottom: 1px solid #e8edf5;
+  }
+}
+
+@media (max-width: 1360px) {
+  .role-grid {
+    grid-template-columns: repeat(3, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 1120px) {
+  .role-grid {
+    grid-template-columns: repeat(2, minmax(240px, 1fr));
   }
 }
 

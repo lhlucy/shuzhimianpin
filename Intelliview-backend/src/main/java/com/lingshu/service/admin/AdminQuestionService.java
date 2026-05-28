@@ -368,6 +368,7 @@ public class AdminQuestionService {
         response.setDifficulty(question.getDifficulty().name());
         response.setDifficultyLabel(question.getDifficulty().getLabel());
         response.setCategoryId(question.getCategoryId());
+        response.setPrimaryJobRoleId(question.getPrimaryJobRoleId());
         response.setMarkCount(question.getMarkCount());
         response.setShareCount(question.getShareCount());
         response.setBrowseCount(question.getBrowseCount());
@@ -437,6 +438,10 @@ public class AdminQuestionService {
         newRequest.setAnswerText(request.getAnswerText());
         newRequest.setDifficulty(request.getDifficulty());
         newRequest.setCategoryId(request.getCategoryId());
+        newRequest.setPrimaryJobRoleId(request.getPrimaryJobRoleId());
+        newRequest.setPrimaryJobRoleCode(request.getPrimaryJobRoleCode());
+        newRequest.setIsForPractice(request.getIsForPractice());
+        newRequest.setIsForInterview(request.getIsForInterview());
         newRequest.setIsVisible(request.getIsVisible());
         newRequest.setSortOrder(request.getSortOrder());
 
@@ -486,6 +491,9 @@ public class AdminQuestionService {
         }
 
         question.setCategoryId(request.getCategoryId());
+        question.setPrimaryJobRoleId(resolvePrimaryJobRoleId(request.getPrimaryJobRoleId(), request.getPrimaryJobRoleCode()));
+        question.setIsForPractice(Boolean.TRUE.equals(request.getIsForPractice()));
+        question.setIsForInterview(Boolean.TRUE.equals(request.getIsForInterview()));
         question.setIsVisible(request.getIsVisible());
         question.setSortOrder(request.getSortOrder());
 

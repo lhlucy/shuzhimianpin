@@ -39,6 +39,9 @@ public class JobRole {
     @TableField("interview_focus")
     private String interviewFocus;
 
+    @TableField("competency_model")
+    private String competencyModel;
+
     @TableField("is_active")
     private Boolean isActive;
 

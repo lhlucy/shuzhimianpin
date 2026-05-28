@@ -48,10 +48,24 @@
           <el-form-item prop="password">
             <el-input v-model="loginForm.password" type="password" placeholder="请输入密码" :prefix-icon="Lock" show-password />
           </el-form-item>
+          <el-form-item prop="captchaCode">
+            <div class="captcha-row">
+              <el-input v-model="loginForm.captchaCode" placeholder="请输入图形验证码" :prefix-icon="Picture" maxlength="6" />
+              <button class="captcha-image" type="button" @click="loadCaptcha" :disabled="captchaLoading" title="点击刷新验证码">
+                <img v-if="captchaImage" :src="captchaImage" alt="图形验证码" />
+                <span v-else>{{ captchaLoading ? '加载中' : '刷新' }}</span>
+              </button>
+            </div>
+          </el-form-item>
           <div class="form-row">
             <el-checkbox v-model="rememberMe">记住我</el-checkbox>
             <a href="#">忘记密码？</a>
           </div>
+          <el-form-item prop="agreement" class="agreement-item">
+            <el-checkbox v-model="loginForm.agreement">
+              我已阅读并同意 <router-link to="/privacy">隐私政策</router-link> 和 <router-link to="/privacy#terms">用户协议</router-link>
+            </el-checkbox>
+          </el-form-item>
           <el-form-item>
             <el-button type="primary" class="submit-btn" @click="handleLogin" :loading="loading">
               登录并开始备战
@@ -61,7 +75,7 @@
 
         <div class="auth-footer">
           <p>还没有账号？ <router-link to="/register">免费注册</router-link></p>
-          <small>登录即表示同意用户协议和 <router-link to="/privacy">隐私政策</router-link></small>
+          <small>登录即表示同意 <router-link to="/privacy#terms">用户协议</router-link> 和 <router-link to="/privacy">隐私政策</router-link></small>
         </div>
       </section>
     </main>
@@ -69,26 +83,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { onMounted, ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Collection, DataAnalysis, Lock, Monitor, User } from '@element-plus/icons-vue'
+import { Collection, DataAnalysis, Lock, Monitor, Picture, User } from '@element-plus/icons-vue'
 import service from '@/utils/axios'
 import { saveAuthSession } from '@/utils/auth'
 
 const router = useRouter()
 const formRef = ref<any>(null)
 const loading = ref(false)
+const captchaLoading = ref(false)
 const rememberMe = ref(true)
+const captchaImage = ref('')
 
 interface LoginForm {
   username: string
   password: string
+  captchaKey: string
+  captchaCode: string
+  agreement: boolean
 }
 
 const loginForm = reactive<LoginForm>({
   username: '',
-  password: ''
+  password: '',
+  captchaKey: '',
+  captchaCode: '',
+  agreement: false
 })
 
 const rules = {
@@ -99,7 +121,34 @@ const rules = {
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 6, message: '密码长度至少 6 个字符', trigger: 'blur' }
+  ],
+  captchaCode: [
+    { required: true, message: '请输入图形验证码', trigger: 'blur' },
+    { min: 4, max: 6, message: '验证码长度不正确', trigger: 'blur' }
+  ],
+  agreement: [
+    {
+      validator: (_rule: any, value: boolean, callback: (error?: Error) => void) => {
+        value ? callback() : callback(new Error('请先阅读并勾选隐私政策和用户协议'))
+      },
+      trigger: 'change'
+    }
   ]
+}
+
+const loadCaptcha = async () => {
+  captchaLoading.value = true
+  try {
+    const response: any = await service.get('/api/auth/captcha')
+    const data = response?.data
+    captchaImage.value = data?.captchaImage || ''
+    loginForm.captchaKey = data?.captchaKey || ''
+    loginForm.captchaCode = ''
+  } catch (error: any) {
+    ElMessage.error(error?.message || '图形验证码加载失败')
+  } finally {
+    captchaLoading.value = false
+  }
 }
 
 const handleLogin = async () => {
@@ -111,7 +160,9 @@ const handleLogin = async () => {
 
     const response: any = await service.post('/api/auth/login/password', {
       username: loginForm.username,
-      password: loginForm.password
+      password: loginForm.password,
+      captchaKey: loginForm.captchaKey,
+      captchaCode: loginForm.captchaCode
     })
 
     if (response.success) {
@@ -129,17 +180,14 @@ const handleLogin = async () => {
       ElMessage.error(response.message || '登录失败')
     }
   } catch (error: any) {
-    if (error.response) {
-      ElMessage.error(error.response.data?.message || '登录失败，请检查用户名和密码')
-    } else if (error.request) {
-      ElMessage.error('登录失败，请检查网络连接')
-    } else {
-      ElMessage.error('登录失败，请检查后端服务')
-    }
+    loadCaptcha()
+    ElMessage.error(error?.message || error?.response?.data?.message || '登录失败，请检查用户名、密码或验证码')
   } finally {
     loading.value = false
   }
 }
+
+onMounted(loadCaptcha)
 </script>
 
 <style scoped>
@@ -356,6 +404,48 @@ const handleLogin = async () => {
 .form-row a {
   color: #ff5a2a;
   font-weight: 800;
+}
+
+.captcha-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 128px;
+  gap: 10px;
+}
+
+.captcha-image {
+  height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #e5e9f0;
+  border-radius: 8px;
+  background: #fbfcfe;
+  color: #687286;
+  cursor: pointer;
+}
+
+.captcha-image img {
+  width: 128px;
+  height: 44px;
+  display: block;
+  object-fit: cover;
+}
+
+.agreement-item {
+  margin-top: -6px;
+}
+
+.agreement-item :deep(.el-checkbox) {
+  align-items: flex-start;
+  height: auto;
+  white-space: normal;
+}
+
+.agreement-item :deep(.el-checkbox__label) {
+  color: #687286;
+  line-height: 1.6;
 }
 
 :deep(.submit-btn.el-button--primary) {

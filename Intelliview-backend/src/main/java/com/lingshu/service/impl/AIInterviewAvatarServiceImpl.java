@@ -183,7 +183,9 @@ public class AIInterviewAvatarServiceImpl implements AIInterviewAvatarService {
         stream.put("alpha", properties.getAlpha());
 
         ObjectNode avatar = objectMapper.createObjectNode();
-        avatar.put("avatar_id", properties.getAvatarId());
+        if (StringUtils.hasText(properties.getAvatarId())) {
+            avatar.put("avatar_id", properties.getAvatarId());
+        }
         avatar.put("width", properties.getWidth());
         avatar.put("height", properties.getHeight());
         avatar.set("stream", stream);
@@ -192,7 +194,9 @@ public class AIInterviewAvatarServiceImpl implements AIInterviewAvatarService {
         tts.put("speed", properties.getSpeed());
         tts.put("pitch", properties.getPitch());
         tts.put("volume", properties.getVolume());
-        tts.put("vcn", properties.getVcn());
+        if (StringUtils.hasText(properties.getVcn())) {
+            tts.put("vcn", properties.getVcn());
+        }
 
         ObjectNode subtitle = objectMapper.createObjectNode();
         subtitle.put("subtitle", 0);
@@ -218,10 +222,12 @@ public class AIInterviewAvatarServiceImpl implements AIInterviewAvatarService {
         avatarDispatch.put("interactive_mode", 0);
 
         ObjectNode tts = objectMapper.createObjectNode();
-        tts.put("vcn", properties.getVcn());
         tts.put("speed", properties.getSpeed());
         tts.put("pitch", properties.getPitch());
         tts.put("volume", properties.getVolume());
+        if (StringUtils.hasText(properties.getVcn())) {
+            tts.put("vcn", properties.getVcn());
+        }
 
         ObjectNode air = objectMapper.createObjectNode();
         air.put("air", 0);
@@ -352,9 +358,7 @@ public class AIInterviewAvatarServiceImpl implements AIInterviewAvatarService {
                 && StringUtils.hasText(properties.getAppId())
                 && StringUtils.hasText(properties.getApiKey())
                 && StringUtils.hasText(properties.getApiSecret())
-                && StringUtils.hasText(properties.getSceneId())
-                && StringUtils.hasText(properties.getAvatarId())
-                && StringUtils.hasText(properties.getVcn());
+                && StringUtils.hasText(properties.getSceneId());
     }
 
     private String buildAuthorizedUrl(String requestUrl, String apiKey, String apiSecret) {

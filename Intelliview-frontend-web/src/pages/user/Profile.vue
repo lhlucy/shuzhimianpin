@@ -84,30 +84,6 @@
             </div>
           </section>
 
-          <section class="growth-card">
-            <div class="panel-head compact">
-              <h2>成长闭环</h2>
-              <small>{{ growthAnalysis?.overallTrend.interviewCount || 0 }} 场样本</small>
-            </div>
-
-            <div class="growth-score">
-              <div>
-                <span>最新综合分</span>
-                <strong>{{ growthAnalysis?.overallTrend.latestScore || 0 }}</strong>
-              </div>
-              <i :class="{ up: scoreChange >= 0, down: scoreChange < 0 }">{{ scoreChangeText }}</i>
-            </div>
-
-            <div class="dimension-list">
-              <article v-for="item in dimensionCards" :key="item.key">
-                <div>
-                  <span>{{ item.name }}</span>
-                  <em>{{ trendText(item.trend) }}</em>
-                </div>
-                <strong>{{ item.latest }}</strong>
-              </article>
-            </div>
-          </section>
         </div>
 
         <section class="resume-card">
@@ -155,41 +131,6 @@
         </section>
       </section>
 
-      <section class="growth-workbench">
-        <div class="panel-head">
-          <h2>成长报告</h2>
-          <router-link to="/user/interview/ai/create">开始新面试</router-link>
-        </div>
-
-        <div class="workbench-grid">
-          <article class="weakness-panel">
-            <h3>高频短板追踪</h3>
-            <div v-if="weaknessCards.length" class="weakness-list">
-              <div v-for="item in weaknessCards" :key="item.keyword">
-                <span :class="`status-${item.status}`">{{ statusText(item.status) }}</span>
-                <strong>{{ item.keyword }}</strong>
-                <p>{{ item.suggestion }}</p>
-                <small>出现 {{ item.occurrences }} 次</small>
-              </div>
-            </div>
-            <div v-else class="empty-growth">
-              <strong>暂无明显短板</strong>
-              <span>完成 AI 模拟面试并生成报告后，这里会持续追踪薄弱点。</span>
-            </div>
-          </article>
-
-          <article class="recommend-panel">
-            <h3>下一步训练建议</h3>
-            <div class="recommend-list">
-              <div v-for="item in recommendationCards" :key="`${item.type}-${item.title}`">
-                <span>{{ item.type === 'QUESTION' ? '专项题目' : '模拟面试' }}</span>
-                <strong>{{ item.title }}</strong>
-                <p>{{ item.reason }}</p>
-              </div>
-            </div>
-          </article>
-        </div>
-      </section>
     </main>
 
     <el-dialog v-model="editVisible" title="编辑个人信息" width="620px">
@@ -241,13 +182,13 @@ import {
   Monitor,
   Plus,
   Star,
+  TrendCharts,
   Upload,
   User
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 import aiInterviewApi, { type AIInterviewHistoryItem } from '@/api/aiInterview'
-import type { AIInterviewGrowthAnalysis } from '@/api/aiInterview'
 import jobRoleApi, { type JobRoleOption } from '@/api/jobRoles'
 import resumeApi, { type UserResume } from '@/api/resumes'
 import userApi, { emptyPracticeStats } from '@/api/user'
@@ -260,13 +201,13 @@ const navItems = [
   { label: '模拟面试', path: '/user/interview/ai/create', icon: Monitor },
   { label: '历史记录', path: '/user/history', icon: Clock },
   { label: '我的收藏', path: '/user/favorites', icon: Star },
+  { label: '成长中心', path: '/user/growth', icon: TrendCharts },
   { label: '个人中心', path: '/user/profile', icon: User }
 ]
 
 const profile = ref<AuthUser | null>(authUser.value)
 const practiceStats = ref({ ...emptyPracticeStats })
 const interviewHistory = ref<AIInterviewHistoryItem[]>([])
-const growthAnalysis = ref<AIInterviewGrowthAnalysis | null>(null)
 const resumes = ref<UserResume[]>([])
 const jobRoles = ref<JobRoleOption[]>([])
 const editVisible = ref(false)
@@ -305,15 +246,6 @@ const abilities = computed(() => [
   { label: '面试均分', value: interviewStats.value.averageScore, color: '#26b96d' },
   { label: '等级经验', value: Math.min(100, Number(profile.value?.experience || 0)), color: '#8b48e8' }
 ])
-const scoreChange = computed(() => Number(growthAnalysis.value?.overallTrend.scoreChange || 0))
-const scoreChangeText = computed(() => `${scoreChange.value >= 0 ? '+' : ''}${scoreChange.value}`)
-const dimensionCards = computed(() => (growthAnalysis.value?.dimensionTrends || []).map((item) => ({
-  ...item,
-  latest: item.values.length ? item.values[item.values.length - 1] : 0
-})))
-const weaknessCards = computed(() => growthAnalysis.value?.weaknessTracking || [])
-const recommendationCards = computed(() => growthAnalysis.value?.recommendations || [])
-
 function assetUrl(value?: string) {
   if (!value) return ''
   if (/^https?:\/\//.test(value)) return value
@@ -322,25 +254,6 @@ function assetUrl(value?: string) {
 
 function percent(value: number, total: number) {
   return total > 0 ? Math.round((value / total) * 100) : 0
-}
-
-function trendText(value: string) {
-  const labels: Record<string, string> = {
-    improving: '提升',
-    declining: '回落',
-    stable: '稳定'
-  }
-  return labels[value] || '跟踪'
-}
-
-function statusText(value: string) {
-  const labels: Record<string, string> = {
-    persistent: '持续薄弱',
-    new: '新增薄弱',
-    improved: '已改善',
-    tracking: '持续跟踪'
-  }
-  return labels[value] || '持续跟踪'
 }
 
 function openEdit() {
@@ -431,11 +344,10 @@ async function removeResume(id: number) {
 
 onMounted(async () => {
   refreshAuthState()
-  const [currentProfile, stats, history, growth, resumeList, roles] = await Promise.allSettled([
+  const [currentProfile, stats, history, resumeList, roles] = await Promise.allSettled([
     loadCurrentUser(),
     userApi.getPracticeStats(),
     aiInterviewApi.getInterviewHistory(20),
-    aiInterviewApi.getGrowthAnalysis(),
     resumeApi.listResumes(),
     jobRoleApi.listJobRoles()
   ])
@@ -443,7 +355,6 @@ onMounted(async () => {
   if (currentProfile.status === 'fulfilled') profile.value = currentProfile.value
   if (stats.status === 'fulfilled') practiceStats.value = stats.value
   if (history.status === 'fulfilled') interviewHistory.value = history.value
-  if (growth.status === 'fulfilled') growthAnalysis.value = growth.value
   if (resumeList.status === 'fulfilled') resumes.value = resumeList.value
   if (roles.status === 'fulfilled') jobRoles.value = roles.value
 })
@@ -597,14 +508,16 @@ onMounted(async () => {
 .content-grid {
   margin-top: 22px;
   display: grid;
-  grid-template-columns: 350px minmax(0, 1fr);
+  grid-template-columns: 360px minmax(440px, 1fr);
   gap: 20px;
+  align-items: stretch;
 }
 
 .left-column {
   display: grid;
   gap: 16px;
-  align-content: start;
+  grid-template-rows: minmax(370px, auto) minmax(370px, 1fr);
+  align-content: stretch;
 }
 
 .info-card,
@@ -623,8 +536,15 @@ onMounted(async () => {
   padding: 18px;
 }
 
+.info-card,
+.visual-card,
+.growth-card,
 .resume-card {
-  min-height: 628px;
+  height: 100%;
+}
+
+.resume-card {
+  min-height: 756px;
 }
 
 .panel-head {
@@ -796,6 +716,23 @@ onMounted(async () => {
   background: #f7faf9;
 }
 
+.center-growth {
+  min-height: 756px;
+  display: grid;
+  grid-template-rows: auto auto 310px 1fr;
+}
+
+.growth-radar {
+  width: 100%;
+  height: 310px;
+  margin-top: 8px;
+}
+
+.compact-dimensions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 18px;
+}
+
 .growth-score span,
 .dimension-list span,
 .weakness-panel h3,
@@ -963,7 +900,7 @@ onMounted(async () => {
 }
 
 .resume-list {
-  max-height: 578px;
+  max-height: 694px;
   overflow: auto;
 }
 
@@ -1037,7 +974,7 @@ onMounted(async () => {
 }
 
 .upload-zone {
-  min-height: 552px;
+  min-height: 484px;
   display: grid;
   place-items: center;
   align-content: center;
@@ -1063,6 +1000,20 @@ onMounted(async () => {
 
 .edit-form :deep(.el-select) {
   width: 100%;
+}
+
+@media (max-width: 1440px) {
+  .content-grid {
+    grid-template-columns: 320px minmax(0, 1fr);
+  }
+
+  .resume-card {
+    min-height: 0;
+  }
+
+  .resume-list {
+    max-height: 360px;
+  }
 }
 
 @media (max-width: 980px) {

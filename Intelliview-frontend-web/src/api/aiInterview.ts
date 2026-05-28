@@ -4,6 +4,7 @@ const AI_INTERVIEW_TIMEOUT = 30000
 
 export interface AIInterviewCreatePayload {
   clientRequestId?: string
+  interviewMode?: 'CUSTOM' | 'RESUME'
   interviewName: string
   jobRoleId?: number
   targetPosition: string
@@ -131,6 +132,13 @@ export interface AIInterviewSummary {
   interviewId: number
   overallScore: number
   dimensionScores?: Record<string, number>
+  competencyModel?: Array<{
+    code: string
+    name: string
+    weight: number
+    description?: string
+    score?: number
+  }>
   summary: string
   strengths: string[]
   weaknesses: string[]

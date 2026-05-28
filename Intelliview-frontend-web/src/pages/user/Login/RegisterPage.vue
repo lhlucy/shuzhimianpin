@@ -43,11 +43,33 @@
           <el-form-item prop="email">
             <el-input v-model="registerForm.email" placeholder="请输入邮箱" :prefix-icon="Message" />
           </el-form-item>
+          <el-form-item prop="captchaCode">
+            <div class="captcha-row">
+              <el-input v-model="registerForm.captchaCode" placeholder="请输入图形验证码" :prefix-icon="Picture" maxlength="6" />
+              <button class="captcha-image" type="button" @click="loadCaptcha" :disabled="captchaLoading" title="点击刷新验证码">
+                <img v-if="captchaImage" :src="captchaImage" alt="图形验证码" />
+                <span v-else>{{ captchaLoading ? '加载中' : '刷新' }}</span>
+              </button>
+            </div>
+          </el-form-item>
+          <el-form-item prop="code">
+            <div class="email-code-row">
+              <el-input v-model="registerForm.code" placeholder="请输入邮箱验证码" :prefix-icon="Key" maxlength="6" />
+              <el-button class="send-code-btn" :disabled="countdown > 0" :loading="sendingCode" @click="sendEmailCode">
+                {{ countdown > 0 ? `${countdown}s` : '发送验证码' }}
+              </el-button>
+            </div>
+          </el-form-item>
           <el-form-item prop="password">
             <el-input v-model="registerForm.password" type="password" placeholder="请输入密码" :prefix-icon="Lock" show-password />
           </el-form-item>
           <el-form-item prop="confirmPassword">
             <el-input v-model="registerForm.confirmPassword" type="password" placeholder="请确认密码" :prefix-icon="Lock" show-password />
+          </el-form-item>
+          <el-form-item prop="agreement" class="agreement-item">
+            <el-checkbox v-model="registerForm.agreement">
+              我已阅读并同意 <router-link to="/privacy">隐私政策</router-link> 和 <router-link to="/privacy#terms">用户协议</router-link>
+            </el-checkbox>
           </el-form-item>
           <el-form-item>
             <el-button type="primary" class="submit-btn" @click="handleRegister" :loading="loading">
@@ -58,7 +80,7 @@
 
         <div class="auth-footer">
           <p>已有账号？ <router-link to="/login">立即登录</router-link></p>
-          <small>注册即表示同意用户协议和 <router-link to="/privacy">隐私政策</router-link></small>
+          <small>注册即表示同意 <router-link to="/privacy#terms">用户协议</router-link> 和 <router-link to="/privacy">隐私政策</router-link></small>
         </div>
       </section>
     </main>
@@ -66,27 +88,42 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { onMounted, onUnmounted, ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Lock, Message, User } from '@element-plus/icons-vue'
+import { Key, Lock, Message, Picture, User } from '@element-plus/icons-vue'
+import service from '@/utils/axios'
+import { saveAuthSession } from '@/utils/auth'
 
 const router = useRouter()
 const formRef = ref<any>(null)
 const loading = ref(false)
+const sendingCode = ref(false)
+const captchaLoading = ref(false)
+const captchaImage = ref('')
+const countdown = ref(0)
+let countdownTimer: number | undefined
 
 interface RegisterForm {
   username: string
   email: string
+  captchaKey: string
+  captchaCode: string
+  code: string
   password: string
   confirmPassword: string
+  agreement: boolean
 }
 
 const registerForm = reactive<RegisterForm>({
   username: '',
   email: '',
+  captchaKey: '',
+  captchaCode: '',
+  code: '',
   password: '',
-  confirmPassword: ''
+  confirmPassword: '',
+  agreement: false
 })
 
 const rules = {
@@ -97,6 +134,14 @@ const rules = {
   email: [
     { required: true, message: '请输入邮箱', trigger: 'blur' },
     { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
+  ],
+  captchaCode: [
+    { required: true, message: '请输入图形验证码', trigger: 'blur' },
+    { min: 4, max: 6, message: '验证码长度不正确', trigger: 'blur' }
+  ],
+  code: [
+    { required: true, message: '请输入邮箱验证码', trigger: 'blur' },
+    { len: 6, message: '邮箱验证码为 6 位', trigger: 'blur' }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
@@ -114,7 +159,70 @@ const rules = {
       },
       trigger: 'blur'
     }
+  ],
+  agreement: [
+    {
+      validator: (_rule: any, value: boolean, callback: (error?: Error) => void) => {
+        value ? callback() : callback(new Error('请先阅读并勾选隐私政策和用户协议'))
+      },
+      trigger: 'change'
+    }
   ]
+}
+
+const loadCaptcha = async () => {
+  captchaLoading.value = true
+  try {
+    const response: any = await service.get('/api/auth/captcha')
+    const data = response?.data
+    captchaImage.value = data?.captchaImage || ''
+    registerForm.captchaKey = data?.captchaKey || ''
+    registerForm.captchaCode = ''
+  } catch (error: any) {
+    ElMessage.error(error?.message || '图形验证码加载失败')
+  } finally {
+    captchaLoading.value = false
+  }
+}
+
+const startCountdown = () => {
+  countdown.value = 60
+  countdownTimer = window.setInterval(() => {
+    countdown.value -= 1
+    if (countdown.value <= 0 && countdownTimer) {
+      window.clearInterval(countdownTimer)
+      countdownTimer = undefined
+    }
+  }, 1000)
+}
+
+const validateFields = (fields: string[]) =>
+  new Promise<boolean>(resolve => {
+    formRef.value?.validateField(fields, (valid: boolean) => resolve(valid))
+  })
+
+const sendEmailCode = async () => {
+  if (!formRef.value || sendingCode.value || countdown.value > 0) return
+
+  const valid = await validateFields(['email', 'captchaCode'])
+  if (!valid) return
+
+  sendingCode.value = true
+  try {
+    const response: any = await service.post('/api/auth/send-code', {
+      email: registerForm.email,
+      type: 'REGISTER',
+      captchaKey: registerForm.captchaKey,
+      captchaCode: registerForm.captchaCode
+    })
+    ElMessage.success(response?.message || '邮箱验证码已发送')
+    startCountdown()
+  } catch (error: any) {
+    ElMessage.error(error?.message || '验证码发送失败')
+    loadCaptcha()
+  } finally {
+    sendingCode.value = false
+  }
 }
 
 const handleRegister = async () => {
@@ -129,19 +237,33 @@ const handleRegister = async () => {
     await formRef.value.validate()
     loading.value = true
 
-    setTimeout(() => {
-      localStorage.setItem('isLoggedIn', 'true')
-      localStorage.setItem('username', registerForm.username)
-      localStorage.setItem('userRole', 'user')
+    const response: any = await service.post('/api/auth/register', {
+      username: registerForm.username,
+      email: registerForm.email,
+      password: registerForm.password,
+      code: registerForm.code
+    })
 
-      ElMessage.success('注册成功，自动登录中...')
+    if (response.success) {
+      const { token, user } = response.data
+      saveAuthSession(token, user)
+      ElMessage.success(response.message || '注册成功，自动登录中...')
       router.push('/user')
-      loading.value = false
-    }, 1000)
-  } catch (_error) {
-    ElMessage.error('请检查注册信息后重试')
+    } else {
+      ElMessage.error(response.message || '注册失败')
+    }
+  } catch (error: any) {
+    ElMessage.error(error?.message || '请检查注册信息后重试')
+  }
+  finally {
+    loading.value = false
   }
 }
+
+onMounted(loadCaptcha)
+onUnmounted(() => {
+  if (countdownTimer) window.clearInterval(countdownTimer)
+})
 </script>
 
 <style scoped>
@@ -312,6 +434,55 @@ const handleRegister = async () => {
 
 .auth-form :deep(.el-input__prefix-inner) {
   color: #9aa3b6;
+}
+
+.captcha-row,
+.email-code-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 128px;
+  gap: 10px;
+}
+
+.captcha-image {
+  height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #e5e9f0;
+  border-radius: 8px;
+  background: #fbfcfe;
+  color: #687286;
+  cursor: pointer;
+}
+
+.captcha-image img {
+  width: 128px;
+  height: 44px;
+  display: block;
+  object-fit: cover;
+}
+
+.send-code-btn {
+  height: 44px;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.agreement-item {
+  margin-top: -6px;
+}
+
+.agreement-item :deep(.el-checkbox) {
+  align-items: flex-start;
+  height: auto;
+  white-space: normal;
+}
+
+.agreement-item :deep(.el-checkbox__label) {
+  color: #687286;
+  line-height: 1.6;
 }
 
 :deep(.submit-btn.el-button--primary) {

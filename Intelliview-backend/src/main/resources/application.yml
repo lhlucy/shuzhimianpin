@@ -109,6 +109,7 @@ app:
     password-strength: 6
     login-max-attempts: 5
     login-lock-minutes: 30
+    resume-encryption-key: ${RESUME_ENCRYPTION_KEY:${JWT_SECRET:}}
   llm:
     aliyun:
       enabled: true

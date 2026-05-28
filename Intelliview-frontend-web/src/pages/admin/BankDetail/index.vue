@@ -153,6 +153,12 @@
               <span>{{ row.description || row.answer ? '已完善' : '待完善' }}</span>
             </template>
           </el-table-column>
+          <el-table-column label="关联岗位" min-width="150">
+            <template #default="{ row }">
+              <el-tag v-if="row.primaryJobRoleId" effect="light">{{ getRoleName(row.primaryJobRoleId) }}</el-tag>
+              <span v-else class="muted-text">未关联</span>
+            </template>
+          </el-table-column>
           <el-table-column label="浏览量" width="110">
             <template #default="{ row }">{{ row.viewCount || 0 }}</template>
           </el-table-column>
@@ -228,6 +234,16 @@
             <el-option label="困难" value="HARD" />
           </el-select>
         </el-form-item>
+        <el-form-item label="关联岗位">
+          <el-select v-model="addFormData.primaryJobRoleId" placeholder="选择后会进入用户端对应岗位题库" clearable filterable>
+            <el-option
+              v-for="role in jobRoles"
+              :key="role.id"
+              :label="role.name"
+              :value="role.id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="题目描述">
           <el-input
             v-model="addFormData.description"
@@ -265,6 +281,7 @@ import { Plus, Edit, ArrowLeft, Search, Refresh, RefreshLeft, Upload, Download }
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import axios from '@/utils/axios'
+import jobRoleApi, { type JobRoleOption } from '@/api/jobRoles'
 import { MdEditor } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 import { apiBaseUrl } from '@/utils/axios'
@@ -280,6 +297,7 @@ const searchQuery = ref('')
 const searchId = ref('')
 const selectedDifficulty = ref('')
 const statusFilter = ref('')
+const jobRoles = ref<JobRoleOption[]>([])
 const viewportHeight = ref(typeof window !== 'undefined' ? window.innerHeight : 900)
 const tableHeight = computed(() => Math.max(viewportHeight.value - 430, 320))
 const bankId = computed(() => Number(route.params.id))
@@ -311,6 +329,7 @@ interface Question {
   updatedAt?: string
   description?: string
   answer?: string
+  primaryJobRoleId?: number
 }
 
 const questions = ref<Question[]>([])
@@ -336,7 +355,8 @@ const mapQuestion = (question: any): Question => ({
   createdAt: question.createdAt || question.created_at || '',
   updatedAt: question.updatedAt || question.updated_at,
   description: question.description || question.questionText || '',
-  answer: question.answer || question.answerText || ''
+  answer: question.answer || question.answerText || '',
+  primaryJobRoleId: question.primaryJobRoleId || question.primary_job_role_id
 })
 
 // 编辑题库对话框相关状态
@@ -358,6 +378,7 @@ const addDialogTitle = ref('添加题目')
 const addFormData = ref({
   title: '',
   difficulty: 'MEDIUM',
+  primaryJobRoleId: undefined as number | undefined,
   description: '',
   answer: ''
 })
@@ -503,6 +524,16 @@ const getDifficultyType = (difficulty: string): string => {
   return typeMap[difficulty] || 'default'
 }
 
+const getRoleName = (roleId: number) => jobRoles.value.find((role) => role.id === roleId)?.name || `岗位 #${roleId}`
+
+const loadJobRoles = async () => {
+  try {
+    jobRoles.value = await jobRoleApi.listJobRoles()
+  } catch (error) {
+    console.error('加载岗位列表失败:', error)
+  }
+}
+
 // 编辑题库
 const handleEditBank = () => {
   if (bankDetail.value) {
@@ -522,6 +553,7 @@ const handleAddQuestion = () => {
   addFormData.value = {
     title: '',
     difficulty: 'MEDIUM',
+    primaryJobRoleId: undefined,
     description: '',
     answer: ''
   }
@@ -597,6 +629,9 @@ const saveAddQuestion = async () => {
       description: addFormData.value.description,
       questionText: addFormData.value.description || addFormData.value.title,
       answerText: addFormData.value.answer,
+      primaryJobRoleId: addFormData.value.primaryJobRoleId,
+      isForPractice: true,
+      isForInterview: true,
       isVisible: true
     })
     const newQuestion = unwrapData(createResponse)
@@ -675,6 +710,7 @@ const downloadImportTemplate = async () => {
 // 组件挂载时获取数据
 onMounted(() => {
   window.addEventListener('resize', syncViewportHeight)
+  loadJobRoles()
   reloadPage()
 })
 
@@ -897,6 +933,11 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.muted-text {
+  color: #9aa3b6;
+  font-size: 12px;
 }
 
 .pagination {

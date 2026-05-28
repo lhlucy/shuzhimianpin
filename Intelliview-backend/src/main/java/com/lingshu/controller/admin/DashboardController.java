@@ -65,4 +65,13 @@ public class DashboardController {
         return ok(ApiResponse.success(result));
     }
 
+    /**
+     * 获取 AI 面试可量化应用成效
+     */
+    @GetMapping("/outcome-metrics")
+    public ResponseEntity<ApiResponse<?>> getOutcomeMetrics() {
+        var result = dashboardService.getOutcomeMetrics();
+        return ok(ApiResponse.success(result));
+    }
+
 }

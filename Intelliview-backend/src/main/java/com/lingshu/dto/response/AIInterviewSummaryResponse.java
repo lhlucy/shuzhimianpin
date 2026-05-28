@@ -19,6 +19,8 @@ public class AIInterviewSummaryResponse {
 
     private Map<String, Double> dimensionScores;
 
+    private List<CompetencyDimension> competencyModel;
+
     private List<String> strengths;
 
     private List<String> weaknesses;
@@ -46,6 +48,21 @@ public class AIInterviewSummaryResponse {
     private List<AIInterviewQuestionReview> questionReviews;
 
     private LocalDateTime completedAt;
+
+    @Data
+    @Builder
+    public static class CompetencyDimension {
+
+        private String code;
+
+        private String name;
+
+        private Double weight;
+
+        private String description;
+
+        private Double score;
+    }
 
     @Data
     @Builder

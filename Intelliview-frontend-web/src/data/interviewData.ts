@@ -32,14 +32,32 @@ const iconMap: Record<string, any> = {
   java_backend: Cpu,
   frontend: Monitor,
   python: Platform,
-  algorithm: DataAnalysis
+  algorithm: DataAnalysis,
+  ai_large_model: DataAnalysis,
+  data_engineer: DataAnalysis,
+  cybersecurity: Cpu,
+  cloud_native: Platform,
+  devops_sre: Platform,
+  qa_test: ChatDotRound,
+  fullstack: Monitor,
+  mobile: Monitor,
+  embedded_iot: Cpu
 }
 
 const colorMap: Record<string, string> = {
   java_backend: '#e87722',
   frontend: '#2f80ed',
   python: '#18a999',
-  algorithm: '#8b5cf6'
+  algorithm: '#8b5cf6',
+  ai_large_model: '#7c3aed',
+  data_engineer: '#0f9f6e',
+  cybersecurity: '#d92d20',
+  cloud_native: '#2563eb',
+  devops_sre: '#475467',
+  qa_test: '#c2410c',
+  fullstack: '#0891b2',
+  mobile: '#db2777',
+  embedded_iot: '#4d7c0f'
 }
 
 const difficultyLabel = (difficulty?: string): RoleQuestion['difficulty'] => {

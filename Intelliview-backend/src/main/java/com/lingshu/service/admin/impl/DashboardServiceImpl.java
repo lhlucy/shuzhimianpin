@@ -4,13 +4,15 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lingshu.entity.AIInterviewAssessment;
-import com.lingshu.entity.Paper;
+import com.lingshu.entity.AIInterview;
+import com.lingshu.entity.LoginRecord;
 import com.lingshu.entity.Question;
 import com.lingshu.entity.QuestionBank;
 import com.lingshu.entity.User;
+import com.lingshu.mapper.AIInterviewMapper;
 import com.lingshu.mapper.AIInterviewAssessmentMapper;
+import com.lingshu.mapper.LoginRecordMapper;
 import com.lingshu.mapper.QuestionMapper;
-import com.lingshu.mapper.PaperMapper;
 import com.lingshu.mapper.QuestionBankMapper;
 import com.lingshu.mapper.UserMapper;
 import com.lingshu.service.admin.DashboardService;
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -35,10 +38,11 @@ import java.util.Objects;
 public class DashboardServiceImpl implements DashboardService {
 
     private final QuestionMapper questionMapper;
-    private final PaperMapper paperMapper;
     private final QuestionBankMapper questionBankMapper;
     private final UserMapper userMapper;
     private final AIInterviewAssessmentMapper aiInterviewAssessmentMapper;
+    private final AIInterviewMapper aiInterviewMapper;
+    private final LoginRecordMapper loginRecordMapper;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -48,10 +52,6 @@ public class DashboardServiceImpl implements DashboardService {
         // 获取题目总数
         long questionCount = questionMapper.selectCount(null);
         stats.put("questionCount", questionCount);
-
-        // 获取试卷总数
-        long paperCount = paperMapper.selectCount(null);
-        stats.put("paperCount", paperCount);
 
         // 获取题库总数
         long bankCount = questionBankMapper.selectCount(null);
@@ -76,16 +76,6 @@ public class DashboardServiceImpl implements DashboardService {
                     "创建或更新了题目「" + nullToDefault(question.getTitle(), "未命名题目") + "」",
                     "系统",
                     question.getUpdatedAt() != null ? question.getUpdatedAt() : question.getCreatedAt()));
-        }
-
-        List<Paper> latestPapers = paperMapper.selectList(
-                new QueryWrapper<Paper>().orderByDesc("updated_at").last("LIMIT 5"));
-        for (Paper paper : latestPapers) {
-            activities.add(createActivity(
-                    "试卷管理",
-                    "创建或更新了试卷「" + nullToDefault(paper.getTitle(), "未命名试卷") + "」",
-                    "系统",
-                    paper.getUpdatedAt() != null ? paper.getUpdatedAt() : paper.getCreatedAt()));
         }
 
         List<QuestionBank> latestBanks = questionBankMapper.selectList(
@@ -184,6 +174,62 @@ public class DashboardServiceImpl implements DashboardService {
                 .toList();
     }
 
+    @Override
+    public Map<String, Object> getOutcomeMetrics() {
+        long userCount = userMapper.selectCount(null);
+        long completedInterviewCount = aiInterviewMapper.selectCount(
+                new QueryWrapper<AIInterview>().eq("status", "COMPLETED"));
+
+        List<Map<String, Object>> perUserRows = aiInterviewMapper.selectMaps(
+                new QueryWrapper<AIInterview>()
+                        .select("user_id AS userId", "COUNT(*) AS interviewCount")
+                        .groupBy("user_id"));
+
+        double averageInterviewPerUser = userCount == 0
+                ? 0.0
+                : (double) completedInterviewCount / userCount;
+
+        List<Map<String, Object>> firstLatestRows = aiInterviewMapper.selectMaps(
+                new QueryWrapper<AIInterview>()
+                        .select("user_id AS userId", "total_score AS score", "COALESCE(ended_at, updated_at, created_at) AS completedAt")
+                        .eq("status", "COMPLETED")
+                        .isNotNull("total_score")
+                        .orderByAsc("user_id")
+                        .orderByAsc("COALESCE(ended_at, updated_at, created_at)"));
+
+        Map<String, List<Double>> userScores = new LinkedHashMap<>();
+        for (Map<String, Object> row : firstLatestRows) {
+            String userId = Objects.toString(row.get("userId"), "");
+            if (StringUtils.hasText(userId)) {
+                userScores.computeIfAbsent(userId, ignored -> new ArrayList<>()).add(toDouble(row.get("score")));
+            }
+        }
+
+        List<Double> scoreChanges = userScores.values().stream()
+                .filter(scores -> scores.size() >= 2)
+                .map(scores -> scores.get(scores.size() - 1) - scores.get(0))
+                .toList();
+        double averageScoreLift = scoreChanges.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+
+        LocalDateTime now = LocalDateTime.now();
+        long active7d = countActiveUsers(now.minusDays(7));
+        long active30d = countActiveUsers(now.minusDays(30));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("averageInterviewPerUser", roundToOneDecimal(averageInterviewPerUser));
+        result.put("averageScoreLift", roundToOneDecimal(averageScoreLift));
+        result.put("scoreLiftSampleUsers", scoreChanges.size());
+        result.put("activeUser7d", active7d);
+        result.put("activeUser30d", active30d);
+        result.put("retention7dRate", userCount == 0 ? 0.0 : roundToOneDecimal(active7d * 100.0 / userCount));
+        result.put("retention30dRate", userCount == 0 ? 0.0 : roundToOneDecimal(active30d * 100.0 / userCount));
+        result.put("satisfactionScore", 0.0);
+        result.put("satisfactionSampleCount", 0);
+        result.put("interviewUserCount", perUserRows.size());
+        result.put("completedInterviewCount", completedInterviewCount);
+        return result;
+    }
+
     /**
      * 创建活动记录
      */
@@ -205,6 +251,32 @@ public class DashboardServiceImpl implements DashboardService {
             return number.intValue();
         }
         return Integer.parseInt(Objects.toString(value, "0"));
+    }
+
+    private Double toDouble(Object value) {
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        if (value instanceof BigDecimal decimal) {
+            return decimal.doubleValue();
+        }
+        return Double.parseDouble(Objects.toString(value, "0"));
+    }
+
+    private long countActiveUsers(LocalDateTime since) {
+        List<Map<String, Object>> rows = loginRecordMapper.selectMaps(
+                new QueryWrapper<LoginRecord>()
+                        .select("COUNT(DISTINCT user_id) AS count")
+                        .ge("login_time", since)
+                        .eq("success", true));
+        if (rows.isEmpty()) {
+            return 0L;
+        }
+        return toInteger(rows.get(0).get("count"));
+    }
+
+    private double roundToOneDecimal(double value) {
+        return Math.round(value * 10.0) / 10.0;
     }
 
     private List<String> readStringList(String rawJson) {

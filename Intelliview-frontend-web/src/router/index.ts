@@ -62,6 +62,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/user/interview/ai/create', name: 'AIInterviewCreate', component: () => import('../pages/user/AIInterview/AIInterviewCreate.vue') },
   { path: '/user/interview/ai/loading', name: 'AIInterviewLoading', component: () => import('../pages/user/AIInterview/AIInterviewLoading.vue') },
   { path: '/user/interview/ai/session/:id', name: 'AIInterviewSession', component: () => import('../pages/user/AIInterview/AIInterviewSession.vue') },
+  { path: '/user/growth', name: 'GrowthCenter', component: () => import('../pages/user/GrowthCenter.vue') },
   { path: '/user/profile', name: 'UserProfile', component: () => import('../pages/user/Profile.vue') },
   { path: '/user/favorites', name: 'UserFavorites', component: () => import('../pages/user/Favorites.vue') },
   { path: '/user/history', name: 'UserHistory', component: () => import('../pages/user/PracticeHistory.vue') },

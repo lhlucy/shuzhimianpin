@@ -38,12 +38,23 @@
         </article>
       </section>
 
+      <section class="metric-ribbon outcome-ribbon">
+        <article v-for="item in outcomeCards" :key="item.label" class="metric-card outcome-card">
+          <div class="metric-top">
+            <span>{{ item.label }}</span>
+            <i>{{ item.icon }}</i>
+          </div>
+          <strong>{{ item.value }}</strong>
+          <small>{{ item.note }}</small>
+        </article>
+      </section>
+
       <section class="overview-grid">
         <article class="panel feature-panel wide">
           <div class="panel-head">
             <div>
               <h3>资源总量对比</h3>
-              <p>基于真实后台数据的柱状图，对比账号、题目、题库和试卷规模。</p>
+              <p>基于真实后台数据的柱状图，对比账号、题目、题库和训练规模。</p>
             </div>
           </div>
           <div ref="resourceChartRef" class="chart-box hero-chart"></div>
@@ -79,7 +90,7 @@
           <div class="panel-head">
             <div>
               <h3>最近活动</h3>
-              <p>来自题目、题库、试卷和用户的真实最近变化。</p>
+              <p>来自题目、题库、面试和用户的真实最近变化。</p>
             </div>
           </div>
 
@@ -287,6 +298,7 @@ import adminApi, {
   type AdminDashboardStats,
   type AdminInterviewRecord,
   type AdminJobRoleRecord,
+  type AdminOutcomeMetrics,
   type AdminWeaknessTag
 } from '@/api/admin'
 
@@ -301,9 +313,21 @@ const recentActivities = ref<AdminActivityItem[]>([])
 const interviewRecords = ref<AdminInterviewRecord[]>([])
 const interviewRoles = ref<AdminJobRoleRecord[]>([])
 const weaknessTags = ref<AdminWeaknessTag[]>([])
+const outcomeMetrics = ref<AdminOutcomeMetrics>({
+  averageInterviewPerUser: 0,
+  averageScoreLift: 0,
+  scoreLiftSampleUsers: 0,
+  activeUser7d: 0,
+  activeUser30d: 0,
+  retention7dRate: 0,
+  retention30dRate: 0,
+  satisfactionScore: 0,
+  satisfactionSampleCount: 0,
+  interviewUserCount: 0,
+  completedInterviewCount: 0
+})
 const stats = ref<AdminDashboardStats>({
   questionCount: 0,
-  paperCount: 0,
   bankCount: 0,
   userCount: 0
 })
@@ -368,13 +392,35 @@ const overviewCards = computed(() => [
     icon: '📚',
     note: '后台维护中的题库',
     tone: 'gold'
+  }
+])
+
+const outcomeCards = computed(() => [
+  {
+    label: '人均面试',
+    value: outcomeMetrics.value.averageInterviewPerUser,
+    icon: '↻',
+    note: `${outcomeMetrics.value.interviewUserCount} 位用户产生过面试`
   },
   {
-    label: '试卷数量',
-    value: stats.value.paperCount,
-    icon: '📝',
-    note: '系统已有试卷资源',
-    tone: 'slate'
+    label: '平均提分',
+    value: `${outcomeMetrics.value.averageScoreLift >= 0 ? '+' : ''}${outcomeMetrics.value.averageScoreLift}`,
+    icon: '↗',
+    note: `${outcomeMetrics.value.scoreLiftSampleUsers} 位用户可比较首末次`
+  },
+  {
+    label: '7日活跃',
+    value: `${outcomeMetrics.value.retention7dRate}%`,
+    icon: '◷',
+    note: `${outcomeMetrics.value.activeUser7d} 位近期活跃用户`
+  },
+  {
+    label: '满意度',
+    value: outcomeMetrics.value.satisfactionSampleCount ? outcomeMetrics.value.satisfactionScore : '待采集',
+    icon: '★',
+    note: outcomeMetrics.value.satisfactionSampleCount
+      ? `${outcomeMetrics.value.satisfactionSampleCount} 条反馈样本`
+      : '已预留指标，等待反馈入口'
   }
 ])
 
@@ -390,12 +436,6 @@ const analyticsCards = computed(() => [
     value: stats.value.bankCount,
     icon: '📚',
     note: '支撑内容分布'
-  },
-  {
-    label: '试卷总数',
-    value: stats.value.paperCount,
-    icon: '📝',
-    note: '当前可用试卷'
   }
 ])
 
@@ -403,18 +443,18 @@ const resourceSeries = computed(() => ([
   { label: '用户', value: stats.value.userCount },
   { label: '题目', value: stats.value.questionCount },
   { label: '题库', value: stats.value.bankCount },
-  { label: '试卷', value: stats.value.paperCount }
+  { label: '训练', value: outcomeMetrics.value.completedInterviewCount }
 ]))
 
 const trendSeries = computed(() => {
   const questionBase = stats.value.questionCount || 1
   const userBase = stats.value.userCount || 1
   const bankBase = stats.value.bankCount || 1
-  const paperBase = stats.value.paperCount || 1
+  const trainingBase = outcomeMetrics.value.completedInterviewCount || 1
   return [
     Math.max(1, Math.round(userBase * 0.45)),
     Math.max(1, Math.round(bankBase * 1.1)),
-    Math.max(1, Math.round(paperBase * 1.4)),
+    Math.max(1, Math.round(trainingBase * 1.4)),
     Math.max(1, Math.round(questionBase * 0.55)),
     questionBase
   ]
@@ -529,7 +569,7 @@ const buildLineOption = () => ({
   xAxis: {
     type: 'category',
     boundaryGap: false,
-    data: ['账号', '题库', '试卷', '训练', '当前'],
+    data: ['账号', '题库', '面试', '训练', '当前'],
     axisLine: { lineStyle: { color: '#dde4ef' } },
     axisLabel: { color: '#647792' }
   },
@@ -593,14 +633,15 @@ const renderCharts = async () => {
 
 const fetchDashboard = async () => {
   try {
-    const [dashboardStats, activities, difficulty, types, interviews, roles, weaknesses] = await Promise.all([
+    const [dashboardStats, activities, difficulty, types, interviews, roles, weaknesses, outcomes] = await Promise.all([
       adminApi.getDashboardStats(),
       adminApi.getRecentActivities(),
       adminApi.getDifficultyDistribution(),
       adminApi.getTypeDistribution(),
       adminApi.getInterviewRecords(),
       adminApi.getInterviewRoles(),
-      adminApi.getWeaknessTags()
+      adminApi.getWeaknessTags(),
+      adminApi.getOutcomeMetrics()
     ])
 
     stats.value = dashboardStats
@@ -610,6 +651,7 @@ const fetchDashboard = async () => {
     interviewRecords.value = interviews
     interviewRoles.value = roles
     weaknessTags.value = weaknesses
+    outcomeMetrics.value = outcomes
     renderCharts()
   } catch (error: any) {
     ElMessage.error(error?.message || '获取后台数据失败')
@@ -751,6 +793,10 @@ onBeforeUnmount(() => {
   gap: 14px;
 }
 
+.outcome-ribbon {
+  margin-top: -2px;
+}
+
 .compact-ribbon {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -772,7 +818,8 @@ onBeforeUnmount(() => {
 }
 
 .metric-card.slate,
-.metric-card.analytics-tone {
+.metric-card.analytics-tone,
+.outcome-card {
   background: linear-gradient(180deg, #f8fafc 0%, #eef3f8 100%);
 }
 

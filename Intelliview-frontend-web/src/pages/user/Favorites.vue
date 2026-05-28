@@ -62,7 +62,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Clock, Collection, House, Monitor, Search, Star, StarFilled, User, Warning } from '@element-plus/icons-vue'
+import { Clock, Collection, House, Monitor, Search, Star, StarFilled, TrendCharts, User, Warning } from '@element-plus/icons-vue'
 import service from '@/utils/axios'
 
 const router = useRouter()
@@ -76,6 +76,7 @@ const navItems = [
   { label: '模拟面试', path: '/user/interview/ai/create', icon: Monitor },
   { label: '历史记录', path: '/user/history', icon: Clock },
   { label: '我的收藏', path: '/user/favorites', icon: Star },
+  { label: '成长中心', path: '/user/growth', icon: TrendCharts },
   { label: '个人中心', path: '/user/profile', icon: User }
 ]
 

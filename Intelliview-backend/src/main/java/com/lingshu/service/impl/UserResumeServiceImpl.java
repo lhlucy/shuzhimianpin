@@ -7,6 +7,7 @@ import com.lingshu.entity.UserResume;
 import com.lingshu.exception.BusinessException;
 import com.lingshu.exception.ErrorCode;
 import com.lingshu.mapper.UserResumeMapper;
+import com.lingshu.service.ResumeCryptoService;
 import com.lingshu.service.ResumeParseService;
 import com.lingshu.service.UploadStorageService;
 import com.lingshu.service.UserResumeService;
@@ -27,6 +28,7 @@ public class UserResumeServiceImpl implements UserResumeService {
     private final UserResumeMapper userResumeMapper;
     private final ResumeParseService resumeParseService;
     private final UploadStorageService uploadStorageService;
+    private final ResumeCryptoService resumeCryptoService;
 
     @Override
     public List<UserResumeResponse> listResumes(Long userId) {
@@ -52,7 +54,7 @@ public class UserResumeServiceImpl implements UserResumeService {
         resume.setFileUrl(stored.url());
         resume.setFileType(stored.fileType());
         resume.setFileSize(stored.fileSize());
-        resume.setContent(parsed.getContent());
+        resume.setContent(resumeCryptoService.encrypt(parsed.getContent()));
         resume.setSummary(parsed.getSummary());
         resume.setIntentionJob(parsed.getIntentionJob());
         resume.setRecruitmentType(parsed.getRecruitmentType());
@@ -73,6 +75,7 @@ public class UserResumeServiceImpl implements UserResumeService {
             throw new BusinessException(ErrorCode.BAD_REQUEST.getCode(), "简历不存在");
         }
         userResumeMapper.deleteById(resumeId);
+        uploadStorageService.deleteStoredFile(resume.getFileUrl());
     }
 
     private UserResumeResponse toResponse(UserResume resume) {
@@ -83,7 +86,7 @@ public class UserResumeServiceImpl implements UserResumeService {
                 .fileUrl(resume.getFileUrl())
                 .fileType(resume.getFileType())
                 .fileSize(resume.getFileSize())
-                .content(resume.getContent())
+                .content(resumeCryptoService.decrypt(resume.getContent()))
                 .summary(resume.getSummary())
                 .intentionJob(resume.getIntentionJob())
                 .recruitmentType(resume.getRecruitmentType())

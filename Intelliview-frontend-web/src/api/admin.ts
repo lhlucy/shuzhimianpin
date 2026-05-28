@@ -3,7 +3,6 @@ import type { AIInterviewSummary } from '@/api/aiInterview'
 
 export interface AdminDashboardStats {
   questionCount: number
-  paperCount: number
   bankCount: number
   userCount: number
 }
@@ -19,6 +18,20 @@ export interface AdminWeaknessTag {
   keyword: string
   count: number
   suggestion?: string
+}
+
+export interface AdminOutcomeMetrics {
+  averageInterviewPerUser: number
+  averageScoreLift: number
+  scoreLiftSampleUsers: number
+  activeUser7d: number
+  activeUser30d: number
+  retention7dRate: number
+  retention30dRate: number
+  satisfactionScore: number
+  satisfactionSampleCount: number
+  interviewUserCount: number
+  completedInterviewCount: number
 }
 
 export interface AdminUser {
@@ -93,7 +106,6 @@ const adminApi = {
     const response = await service.get('/api/admin/dashboard/stats')
     return unwrap<AdminDashboardStats>(response, {
       questionCount: 0,
-      paperCount: 0,
       bankCount: 0,
       userCount: 0
     })
@@ -117,6 +129,23 @@ const adminApi = {
   async getWeaknessTags() {
     const response = await service.get('/api/admin/dashboard/weakness-tags')
     return unwrap<AdminWeaknessTag[]>(response, [])
+  },
+
+  async getOutcomeMetrics() {
+    const response = await service.get('/api/admin/dashboard/outcome-metrics')
+    return unwrap<AdminOutcomeMetrics>(response, {
+      averageInterviewPerUser: 0,
+      averageScoreLift: 0,
+      scoreLiftSampleUsers: 0,
+      activeUser7d: 0,
+      activeUser30d: 0,
+      retention7dRate: 0,
+      retention30dRate: 0,
+      satisfactionScore: 0,
+      satisfactionSampleCount: 0,
+      interviewUserCount: 0,
+      completedInterviewCount: 0
+    })
   },
 
   async getUsers(keyword?: string) {

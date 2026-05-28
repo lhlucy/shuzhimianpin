@@ -3,9 +3,9 @@
     <div class="footer-container">
       <div class="footer-brand">
         <div class="footer-logo">
-          <div class="logo-mark">L</div>
+          <div class="logo-mark">数</div>
           <div>
-            <h3>Intelliview</h3>
+            <h3>数智面聘</h3>
             <p>围绕目标岗位，把选岗、刷题和复盘串成一条清晰的准备路径。</p>
           </div>
         </div>
@@ -31,8 +31,8 @@
           <h4>平台支持</h4>
           <a href="mailto:support@intelliview.ai">题目反馈</a>
           <a href="mailto:contact@intelliview.ai">联系我们</a>
-          <span>用户协议</span>
-          <span>隐私说明</span>
+          <router-link to="/privacy#terms">用户协议</router-link>
+          <router-link to="/privacy">隐私说明</router-link>
         </section>
 
         <section>
@@ -53,7 +53,7 @@
     </div>
 
     <div class="footer-bottom">
-      <span>© 2026 Intelliview. 保留所有权利。</span>
+      <span>© 2026 数智面聘. 保留所有权利。</span>
       <span>浅色 / 深色双主题，面向真实岗位准备场景</span>
     </div>
   </footer>

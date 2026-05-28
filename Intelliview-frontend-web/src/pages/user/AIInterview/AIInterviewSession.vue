@@ -28,9 +28,9 @@
         </span>
 
         <div class="interviewer-action-row">
-          <button type="button" class="end-btn" :disabled="ending || !session" @click="confirmEndInterview">
+          <button type="button" class="end-btn" :disabled="ending || !session || finished" @click="confirmEndInterview">
             <el-icon><Close /></el-icon>
-            结束面试
+            {{ finished ? '面试已结束' : '结束面试' }}
           </button>
 
           <button type="button" class="back-side-btn" @click="goBack">
@@ -220,22 +220,33 @@
             <div><span>用时</span><strong>{{ formatDuration(summary.durationSeconds || 0) }}</strong></div>
           </section>
 
+          <section class="growth-join-card">
+            <div>
+              <span>成长曲线</span>
+              <h3>{{ growthCurveJoined ? '本场面试已加入成长曲线' : '把本场面试纳入长期成长分析' }}</h3>
+              <p>加入后会与其他面试报告一起生成五维趋势线，并在成长中心沉淀可追溯证据的短板建议。</p>
+            </div>
+            <button type="button" :disabled="growthCurveJoining || growthCurveJoined" @click="openGrowthJoinDialog">
+              {{ growthCurveJoining ? '分析中...' : (growthCurveJoined ? '已加入' : '加入成长曲线') }}
+            </button>
+          </section>
+
           <section class="dimension-panel">
             <article class="radar-card">
               <div class="section-head">
                 <h3>能力雷达</h3>
-                <p>五个岗位能力维度共同解释综合评分来源。</p>
+                <p>综合能力表现用于辅助解释本次面试评分。</p>
               </div>
               <div ref="radarChartRef" class="radar-chart" aria-label="能力维度雷达图"></div>
             </article>
-            <article class="dimension-card-list">
-              <div v-for="item in dimensionItems" :key="item.key" class="dimension-card">
-                <div>
-                  <span>{{ item.label }}</span>
-                  <strong>{{ Math.round(item.score) }}</strong>
-                </div>
-                <p>{{ item.description }}</p>
-                <i :style="{ width: `${Math.max(4, Math.min(100, item.score))}%` }"></i>
+            <article class="scoring-model-card">
+              <div class="section-head">
+                <h3>岗位评分体系</h3>
+                <p>{{ session?.targetPosition || '当前岗位' }}专属能力维度与权重，权重越高代表面试更关注该能力。</p>
+              </div>
+              <div ref="scoringModelChartRef" class="radar-chart scoring-model-chart" aria-label="岗位评分体系权重雷达图"></div>
+              <div class="scoring-model-legend">
+                <span v-for="item in competencyItems" :key="item.code">{{ item.name }} {{ Math.round(item.weight) }}%</span>
               </div>
             </article>
           </section>
@@ -339,7 +350,9 @@
             </div>
             <div class="call-view-actions">
               <button type="button" class="call-back-btn" @click="closeCallView">返回对话</button>
-              <button type="button" class="call-end-btn" :disabled="ending || !session" @click="confirmEndInterview">结束面试</button>
+              <button type="button" class="call-end-btn" :disabled="ending || !session || finished" @click="confirmEndInterview">
+                {{ finished ? '面试已结束' : '结束面试' }}
+              </button>
             </div>
           </header>
 
@@ -420,6 +433,21 @@
           </footer>
         </section>
       </transition>
+
+      <el-dialog v-model="growthJoinVisible" title="加入成长曲线" width="520px" class="growth-dialog">
+        <div class="growth-dialog-body">
+          <strong>这会把本场面试作为一个成长样本</strong>
+          <p>系统会异步读取本场报告的五个能力维度、逐题复盘和关键词缺失情况，用于生成成长中心的趋势线和证据型建议。你可以随时在成长中心取消勾选。</p>
+          <label>
+            <input v-model="growthDontRemind" type="checkbox" />
+            不再提醒
+          </label>
+        </div>
+        <template #footer>
+          <el-button @click="growthJoinVisible = false">暂不加入</el-button>
+          <el-button type="primary" :loading="growthCurveJoining" @click="confirmJoinGrowthCurve">加入并开始分析</el-button>
+        </template>
+      </el-dialog>
     </main>
   </div>
 </template>
@@ -458,6 +486,14 @@ interface DimensionItem {
   description: string
 }
 
+interface CompetencyItem {
+  code: string
+  name: string
+  weight: number
+  description?: string
+  score?: number
+}
+
 const DIMENSION_DEFINITIONS: Array<Omit<DimensionItem, 'score'>> = [
   { key: 'technicalDepth', label: '技术深度', description: '核心原理、关键机制、边界条件' },
   { key: 'projectRelevance', label: '项目匹配', description: '项目经历、技术栈和岗位场景结合度' },
@@ -479,6 +515,10 @@ const resumeLoading = ref(false)
 const waitingAI = ref(false)
 const ending = ref(false)
 const summaryLoading = ref(false)
+const growthJoinVisible = ref(false)
+const growthCurveJoining = ref(false)
+const growthCurveJoined = ref(false)
+const growthDontRemind = ref(localStorage.getItem('growthCurveJoinNoRemind') === 'true')
 const recording = ref(false)
 const transcribing = ref(false)
 const liveTranscript = ref('')
@@ -494,6 +534,7 @@ const cameraVideoRef = ref<HTMLVideoElement | null>(null)
 const messagesRef = ref<HTMLElement | null>(null)
 const callMessagesRef = ref<HTMLElement | null>(null)
 const radarChartRef = ref<HTMLElement | null>(null)
+const scoringModelChartRef = ref<HTMLElement | null>(null)
 const pendingAvatarTexts = ref<string[]>([])
 let startedAt = Date.now()
 let elapsedTimer: number | undefined
@@ -506,6 +547,7 @@ let keepSpeechRecognitionAlive = false
 let speechRecognitionStarted = false
 let avatarClosingPromise: Promise<void> | null = null
 let radarChart: echarts.ECharts | null = null
+let scoringModelChart: echarts.ECharts | null = null
 let pageExitHandled = false
 const cameraError = ref('')
 const voiceError = ref('')
@@ -557,7 +599,28 @@ const voiceDisplayText = computed(() => {
   if (merged) return merged
   return recording.value ? '正在聆听，请开始说话...' : '语音已结束，正在生成文字...'
 })
+
+const GROWTH_CURVE_STORAGE_KEY = 'growth_curve_interview_ids'
 const dimensionItems = computed(() => getReviewDimensionItems(summary.value?.dimensionScores))
+const competencyItems = computed<CompetencyItem[]>(() => {
+  const model = summary.value?.competencyModel || []
+  if (model.length) {
+    return model.map((item) => ({
+      code: item.code,
+      name: item.name,
+      weight: normalizePercent(item.weight),
+      description: item.description,
+      score: normalizeScore(item.score ?? summary.value?.overallScore ?? 0)
+    }))
+  }
+  return dimensionItems.value.map((item) => ({
+    code: item.key,
+    name: item.label,
+    weight: normalizePercent(AIInterviewDimensionWeights[item.key] ?? 20),
+    description: item.description,
+    score: item.score
+  }))
+})
 
 const formatDuration = (seconds?: number) => {
   const totalSeconds = Number(seconds || 0)
@@ -568,10 +631,73 @@ const formatDuration = (seconds?: number) => {
   return remainSeconds ? `${minutes} 分 ${remainSeconds} 秒` : `${minutes} 分钟`
 }
 
+const readGrowthCurveIds = () => {
+  try {
+    const value = JSON.parse(localStorage.getItem(GROWTH_CURVE_STORAGE_KEY) || '[]')
+    return Array.isArray(value) ? value.map(Number).filter(Boolean) : []
+  } catch {
+    return []
+  }
+}
+
+const refreshGrowthCurveJoined = () => {
+  growthCurveJoined.value = readGrowthCurveIds().includes(interviewId.value)
+}
+
+const openGrowthJoinDialog = () => {
+  if (growthCurveJoined.value) return
+  if (growthDontRemind.value || localStorage.getItem('growthCurveJoinNoRemind') === 'true') {
+    confirmJoinGrowthCurve()
+    return
+  }
+  growthJoinVisible.value = true
+}
+
+const confirmJoinGrowthCurve = async () => {
+  if (!session.value?.interviewId) return
+  growthCurveJoining.value = true
+  try {
+    const ids = readGrowthCurveIds()
+    if (!ids.includes(session.value.interviewId)) {
+      ids.unshift(session.value.interviewId)
+      localStorage.setItem(GROWTH_CURVE_STORAGE_KEY, JSON.stringify(ids.slice(0, 80)))
+    }
+    if (growthDontRemind.value) {
+      localStorage.setItem('growthCurveJoinNoRemind', 'true')
+    }
+    growthCurveJoined.value = true
+    growthJoinVisible.value = false
+    ElMessage.success('已加入成长曲线，系统正在后台分析')
+    Promise.allSettled([
+      aiInterviewApi.getSummary(session.value.interviewId),
+      aiInterviewApi.getGrowthAnalysis()
+    ]).catch(() => undefined)
+  } finally {
+    growthCurveJoining.value = false
+  }
+}
+
 const normalizeDimensionScore = (scores: Record<string, number> | undefined, key: string) => {
   const fallback = summary.value?.overallScore || 0
   const score = Number(scores?.[key] ?? fallback)
+  return normalizeScore(score)
+}
+
+const normalizeScore = (score: number) => {
   return Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : 0
+}
+
+const normalizePercent = (value: number) => {
+  const percent = Number(value)
+  return Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0
+}
+
+const AIInterviewDimensionWeights: Record<string, number> = {
+  technicalDepth: 30,
+  projectRelevance: 25,
+  problemSolving: 20,
+  communicationClarity: 15,
+  jobMatch: 10
 }
 
 const getReviewDimensionItems = (scores?: Record<string, number>): DimensionItem[] => {
@@ -619,10 +745,56 @@ const renderRadarChart = async () => {
     }]
   })
   radarChart.resize()
+  renderScoringModelChart()
+}
+
+const renderScoringModelChart = async () => {
+  await nextTick()
+  if (!scoringModelChartRef.value || !summary.value) return
+  if (!scoringModelChart) {
+    scoringModelChart = echarts.init(scoringModelChartRef.value)
+  }
+  const items = competencyItems.value
+  const maxWeight = Math.max(30, Math.ceil(Math.max(...items.map((item) => item.weight), 0) / 10) * 10)
+  scoringModelChart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'item',
+      formatter: () => items.map((item) => {
+        const description = item.description ? `<br/><span style="opacity:.72">${item.description}</span>` : ''
+        return `${item.name}: ${Math.round(item.weight)}%${description}`
+      }).join('<br/>')
+    },
+    radar: {
+      radius: '65%',
+      center: ['50%', '52%'],
+      indicator: items.map((item) => ({ name: item.name, max: maxWeight })),
+      splitNumber: 3,
+      axisName: {
+        color: isDark.value ? '#dbe7ff' : '#435064',
+        fontWeight: 800
+      },
+      splitLine: { lineStyle: { color: isDark.value ? 'rgba(177, 196, 226, 0.16)' : 'rgba(67, 80, 100, 0.14)' } },
+      splitArea: { areaStyle: { color: ['rgba(65, 110, 230, 0.05)', 'rgba(255, 90, 42, 0.04)'] } },
+      axisLine: { lineStyle: { color: isDark.value ? 'rgba(177, 196, 226, 0.18)' : 'rgba(67, 80, 100, 0.16)' } }
+    },
+    series: [{
+      type: 'radar',
+      data: [{
+        value: items.map((item) => Number(item.weight.toFixed(1))),
+        name: '岗位权重',
+        areaStyle: { color: 'rgba(65, 110, 230, 0.22)' },
+        lineStyle: { width: 3, color: '#416ee6' },
+        itemStyle: { color: '#416ee6' }
+      }]
+    }]
+  })
+  scoringModelChart.resize()
 }
 
 const resizeRadarChart = () => {
   radarChart?.resize()
+  scoringModelChart?.resize()
 }
 
 const scrollToBottom = async () => {
@@ -1138,6 +1310,7 @@ watch(
 
 onMounted(() => {
   activeMainTab.value = reportMode.value ? 'report' : 'dialogue'
+  refreshGrowthCurveJoined()
   loadInterview()
   loadResumes()
   window.addEventListener('pagehide', handlePageExit)
@@ -1149,6 +1322,18 @@ onMounted(() => {
 })
 
 onBeforeRouteLeave(async () => {
+  if (finished.value && summary.value && !growthCurveJoined.value && localStorage.getItem('growthCurveJoinNoRemind') !== 'true') {
+    try {
+      await ElMessageBox.confirm(
+        '这场面试还没有加入成长曲线。加入后可在成长中心生成五维趋势与短板证据分析，是否现在加入？',
+        '加入成长曲线',
+        { confirmButtonText: '加入', cancelButtonText: '暂不加入', type: 'info' }
+      )
+      await confirmJoinGrowthCurve()
+    } catch {
+      // 用户选择暂不加入时继续离开页面。
+    }
+  }
   stopCameraPreview()
   await closeAvatarSession()
 })
@@ -1162,6 +1347,8 @@ onUnmounted(() => {
   stopSpeechRecognition()
   radarChart?.dispose()
   radarChart = null
+  scoringModelChart?.dispose()
+  scoringModelChart = null
   if (mediaRecorder && recording.value) mediaRecorder.stop()
   void closeAvatarSession()
 })
@@ -1338,7 +1525,10 @@ onUnmounted(() => {
 }
 
 .end-btn:disabled {
-  opacity: 0.55;
+  border-color: rgba(148, 163, 184, 0.42);
+  color: #8a94a6;
+  background: rgba(148, 163, 184, 0.12);
+  opacity: 1;
   cursor: not-allowed;
 }
 
@@ -2165,6 +2355,12 @@ onUnmounted(() => {
   background: #ff5a5a;
 }
 
+.call-end-btn:disabled {
+  color: #8a94a6;
+  background: rgba(148, 163, 184, 0.16);
+  cursor: not-allowed;
+}
+
 .call-view-stage {
   min-height: 0;
   display: grid;
@@ -2538,6 +2734,81 @@ onUnmounted(() => {
   font-weight: 800;
 }
 
+.growth-join-card {
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid var(--report-card-border);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255, 90, 42, 0.1), rgba(65, 110, 230, 0.08));
+  box-shadow: var(--report-shadow);
+}
+
+.growth-join-card span {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.growth-join-card h3 {
+  margin-top: 6px;
+  color: var(--primary-text);
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.growth-join-card p {
+  margin-top: 6px;
+  color: var(--muted-text);
+  line-height: 1.7;
+  font-size: 13px;
+}
+
+.growth-join-card button {
+  flex: none;
+  height: 40px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 999px;
+  color: #ffffff;
+  background: var(--accent);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.growth-join-card button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.growth-dialog-body {
+  display: grid;
+  gap: 12px;
+}
+
+.growth-dialog-body strong {
+  color: #252936;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.growth-dialog-body p {
+  color: #647084;
+  line-height: 1.8;
+}
+
+.growth-dialog-body label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #647084;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .dimension-panel {
   display: grid;
   grid-template-columns: minmax(300px, 0.94fr) minmax(0, 1.06fr);
@@ -2545,7 +2816,7 @@ onUnmounted(() => {
 }
 
 .radar-card,
-.dimension-card {
+.scoring-model-card {
   border: 1px solid var(--report-card-border);
   background: var(--report-card-bg);
   box-shadow: var(--report-shadow);
@@ -2565,54 +2836,34 @@ onUnmounted(() => {
   min-height: 282px;
 }
 
-.dimension-card-list {
+.scoring-model-card {
+  min-height: 360px;
+  padding: 18px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.dimension-card {
-  min-height: 124px;
-  padding: 16px;
-  display: grid;
-  align-content: space-between;
-  gap: 10px;
-  border-radius: 14px;
+  grid-template-rows: auto minmax(252px, 1fr) auto;
+  gap: 14px;
+  border-radius: 16px;
   overflow: hidden;
 }
 
-.dimension-card div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.scoring-model-chart {
+  min-height: 252px;
 }
 
-.dimension-card span {
+.scoring-model-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.scoring-model-legend span {
+  padding: 6px 8px;
+  border: 1px solid var(--report-divider);
+  border-radius: 8px;
+  background: var(--report-muted-bg);
   color: var(--muted-text);
   font-size: 12px;
-  font-weight: 900;
-}
-
-.dimension-card strong {
-  color: var(--accent);
-  font-size: 28px;
-  line-height: 1;
-  font-weight: 900;
-}
-
-.dimension-card p {
-  min-height: 38px;
-  color: var(--report-text);
-  font-size: 13px;
-  line-height: 1.55;
-}
-
-.dimension-card i {
-  height: 6px;
-  display: block;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #ff5a2a, #416ee6);
+  font-weight: 800;
 }
 
 .report-section-grid {
@@ -2900,8 +3151,9 @@ onUnmounted(() => {
 
   .report-hero,
   .report-meta-row,
+  .growth-join-card,
   .dimension-panel,
-  .dimension-card-list,
+  .scoring-model-legend,
   .report-section-grid,
   .review-columns,
   .keyword-row {

@@ -19,20 +19,27 @@
         <section class="create-hero">
           <span class="eyebrow">AI INTERVIEW</span>
           <h1>开始模拟面试</h1>
-          <p>选择岗位、技术栈和简历后，进入一场更贴近真实场景的岗位化模拟面试。</p>
+          <p>选择岗位和面试模式后，进入一场更贴近真实场景的岗位化模拟面试。</p>
 
           <div class="stage-preview">
             <div class="stage-head">
               <span></span>
-              <strong>{{ selectedRoleName }}</strong>
+              <strong>{{ setupTitle }}</strong>
             </div>
             <div class="stage-dialog">
               <i>AI</i>
               <p>{{ previewQuestion }}</p>
             </div>
             <div class="stage-tags">
-              <span v-for="tech in form.techStacks.slice(0, 4)" :key="tech">{{ tech }}</span>
-              <span v-if="!form.techStacks.length">待选择技术栈</span>
+              <template v-if="form.interviewMode === 'RESUME'">
+                <span>简历项目</span>
+                <span>技能关键词</span>
+                <span>经历追问</span>
+              </template>
+              <template v-else>
+                <span v-for="tech in previewTechStacks.slice(0, 4)" :key="tech">{{ tech }}</span>
+                <span v-if="!previewTechStacks.length">待选择技术栈</span>
+              </template>
             </div>
           </div>
 
@@ -47,12 +54,31 @@
           <div class="card-head">
             <div>
               <span>配置面试</span>
-              <h2>{{ selectedRoleName }}</h2>
+              <h2>{{ setupTitle }}</h2>
             </div>
             <small>{{ techSummary }}</small>
           </div>
 
-          <div class="field">
+          <div class="mode-switch">
+            <button
+              type="button"
+              :class="{ active: form.interviewMode === 'CUSTOM' }"
+              @click="form.interviewMode = 'CUSTOM'"
+            >
+              <strong>自定义面试</strong>
+              <span>以选择岗位和技术栈为主，简历只用于追问素材</span>
+            </button>
+            <button
+              type="button"
+              :class="{ active: form.interviewMode === 'RESUME' }"
+              @click="form.interviewMode = 'RESUME'"
+            >
+              <strong>按简历面试</strong>
+              <span>只选择简历，系统根据简历意向与经历生成问题</span>
+            </button>
+          </div>
+
+          <div v-if="form.interviewMode === 'CUSTOM'" class="field">
             <strong>目标岗位</strong>
             <div class="pill-row">
               <button
@@ -77,7 +103,7 @@
             />
           </div>
 
-          <div class="field">
+          <div v-if="form.interviewMode === 'CUSTOM'" class="field">
             <strong>技术选择</strong>
             <div class="tech-grid">
               <button
@@ -95,8 +121,8 @@
 
           <div class="resume-row">
             <div>
-              <strong>简历（可选）</strong>
-              <p>可上传新简历，也可选择个人中心已有简历</p>
+              <strong>{{ form.interviewMode === 'RESUME' ? '简历（必选）' : '简历（可选）' }}</strong>
+              <p>{{ resumeModeHint }}</p>
             </div>
             <div class="resume-actions">
               <el-select v-model="selectedResumeId" clearable placeholder="选择已有简历" class="resume-select">
@@ -143,7 +169,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Clock, Collection, Connection, House, Monitor, Star, Upload, User, VideoPlay } from '@element-plus/icons-vue'
+import { Clock, Collection, Connection, House, Monitor, Star, TrendCharts, Upload, User, VideoPlay } from '@element-plus/icons-vue'
 import type { AIInterviewCreatePayload } from '@/api/aiInterview'
 import jobRoleApi, { type JobRoleConfig, type JobRoleOption } from '@/api/jobRoles'
 import resumeApi, { type UserResume } from '@/api/resumes'
@@ -160,10 +186,12 @@ const navItems = [
   { label: '模拟面试', path: '/user/interview/ai/create', icon: Monitor },
   { label: '历史记录', path: '/user/history', icon: Clock },
   { label: '我的收藏', path: '/user/favorites', icon: Star },
+  { label: '成长中心', path: '/user/growth', icon: TrendCharts },
   { label: '个人中心', path: '/user/profile', icon: User }
 ]
 
 const form = reactive({
+  interviewMode: 'CUSTOM' as 'CUSTOM' | 'RESUME',
   role: '',
   techStacks: [] as string[],
   interviewName: ''
@@ -183,8 +211,20 @@ const currentTechOptions = computed(() => {
 const selectedResume = computed(() => resumes.value.find((resume) => resume.id === selectedResumeId.value) || null)
 const selectedRole = computed(() => roleBanks.value.find((item) => item.code === form.role))
 const selectedRoleName = computed(() => selectedRole.value?.name || '岗位化模拟面试')
-const techSummary = computed(() => form.techStacks.length ? `${form.techStacks.length} 项技术已选` : '请选择技术栈')
+const setupTitle = computed(() => form.interviewMode === 'RESUME' ? '按简历生成面试' : selectedRoleName.value)
+const roleDefaultTechStacks = computed(() => currentTechOptions.value.slice(0, 3))
+const effectiveTechStacks = computed(() => form.interviewMode === 'RESUME' ? roleDefaultTechStacks.value : form.techStacks)
+const previewTechStacks = computed(() => effectiveTechStacks.value.length ? effectiveTechStacks.value : currentTechOptions.value.slice(0, 4))
+const techSummary = computed(() => form.interviewMode === 'RESUME'
+  ? '简历驱动'
+  : (form.techStacks.length ? `${form.techStacks.length} 项技术已选` : '请选择技术栈'))
+const resumeModeHint = computed(() => form.interviewMode === 'CUSTOM'
+  ? '当前以选择岗位为主，简历会作为项目经历和追问素材'
+  : '当前只需选择简历，系统会围绕简历意向、技能和项目经历追问')
 const previewQuestion = computed(() => {
+  if (form.interviewMode === 'RESUME') {
+    return '请先介绍一下简历中最能体现你能力的一段项目经历，我会基于项目继续追问。'
+  }
   const focus = currentRoleConfig.value?.role?.interviewFocus || selectedRole.value?.interviewFocus || []
   if (focus.length) {
     return `请结合你的项目经历，围绕 ${focus[0]} 说说一次你解决技术问题的过程。`
@@ -251,13 +291,28 @@ const startInterview = () => {
     ElMessage.warning('请先填写面试名称')
     return
   }
+  if (form.interviewMode === 'CUSTOM' && !role) {
+    ElMessage.warning('请先选择目标岗位')
+    return
+  }
+  if (form.interviewMode === 'CUSTOM' && !form.techStacks.length) {
+    ElMessage.warning('请至少选择一个技术栈')
+    return
+  }
+  if (form.interviewMode === 'RESUME' && !selectedResume.value) {
+    ElMessage.warning('按简历面试请先选择或上传简历')
+    return
+  }
 
   const payload: AIInterviewCreatePayload = {
+    interviewMode: form.interviewMode,
     interviewName,
     jobRoleId: role?.id,
-    targetPosition: selectedRoleName.value,
+    targetPosition: form.interviewMode === 'RESUME'
+      ? (selectedResume.value?.intentionJob || selectedRoleName.value)
+      : selectedRoleName.value,
     interviewLanguage: 'zh-CN',
-    techStacks: form.techStacks,
+    techStacks: effectiveTechStacks.value,
     resumeFileName: selectedResume.value?.originalFileName,
     resumeContent: selectedResume.value?.content,
     voiceEnabled: true
@@ -272,7 +327,7 @@ const startInterview = () => {
         draft: draftKey,
         role: selectedRoleName.value,
         name: interviewName,
-        tech: form.techStacks.join(' / ')
+        tech: effectiveTechStacks.value.join(' / ')
       }
     })
   } catch {
@@ -585,7 +640,51 @@ onMounted(async () => {
 
 .field {
   display: grid;
+  gap: 8px;
+}
+
+.field-tip {
+  color: #8a95a8;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.mode-switch button {
+  min-height: 76px;
+  padding: 14px;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  border: 1px solid #e5e9f0;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #687286;
+  cursor: pointer;
+  text-align: left;
+}
+
+.mode-switch button.active {
+  border-color: #ff5a2a;
+  background: #fff5ef;
+  box-shadow: inset 0 0 0 1px #ff5a2a;
+}
+
+.mode-switch strong {
+  color: #242733;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.mode-switch span {
+  color: #7c8799;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .field strong,
@@ -600,6 +699,9 @@ onMounted(async () => {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  max-height: 154px;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .pill-row button,

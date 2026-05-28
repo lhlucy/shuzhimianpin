@@ -12,4 +12,11 @@ public class LoginRequest {
     @NotBlank(message = "密码不能为空")
     @Size(min = 6, max = 50, message = "密码长度6-50位")
     private String password;
+
+    @NotBlank(message = "图形验证码key不能为空")
+    private String captchaKey;
+
+    @NotBlank(message = "图形验证码不能为空")
+    @Size(min = 4, max = 6, message = "图形验证码长度不正确")
+    private String captchaCode;
 }

@@ -12,9 +12,10 @@ public class SendCodeRequest {
     @NotBlank(message = "类型不能为空")
     private String type; // LOGIN, REGISTER, RESET_PASSWORD
 
-//    @NotBlank(message = "验证码key不能为空")
-//    private String captchaKey;
-//
-//    @NotBlank(message = "验证码不能为空")
-//    private String captchaCode;
+    @NotBlank(message = "图形验证码key不能为空")
+    private String captchaKey;
+
+    @NotBlank(message = "图形验证码不能为空")
+    @Size(min = 4, max = 6, message = "图形验证码长度不正确")
+    private String captchaCode;
 }

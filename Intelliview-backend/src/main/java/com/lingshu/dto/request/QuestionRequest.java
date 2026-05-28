@@ -22,9 +22,17 @@ public class QuestionRequest {
 
     private Long categoryId;
 
+    private Long primaryJobRoleId;
+
+    private String primaryJobRoleCode;
+
     private List<Long> tagIds;
 
     private Boolean isVisible = true;
+
+    private Boolean isForPractice = true;
+
+    private Boolean isForInterview = true;
 
     private Integer sortOrder = 0;
 }

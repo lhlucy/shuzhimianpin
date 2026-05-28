@@ -42,6 +42,7 @@ const navItems = [
   { label: '模拟面试', path: '/user/interview/ai/create' },
   { label: '历史', path: '/user/history' },
   { label: '收藏', path: '/user/favorites' },
+  { label: '成长中心', path: '/user/growth' },
   { label: '个人中心', path: '/user/profile' }
 ]
 

@@ -38,7 +38,7 @@ public class AuthController {
     private final JwtService jwtService;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
-//    private final CaptchaService captchaService;
+    private final CaptchaService captchaService;
     private final EmailService emailService;
     private final GithubAuthService githubAuthService;
     private final UserService userService;
@@ -46,11 +46,11 @@ public class AuthController {
     /**
      * 获取验证码
      */
-//    @GetMapping("/captcha")
-//    public ResponseEntity<ApiResponse<CaptchaResponse>> getCaptcha() {
-//        CaptchaResponse captcha = captchaService.generateCaptcha();
-//        return ResponseEntity.ok(ApiResponse.success(captcha));
-//    }
+    @GetMapping("/captcha")
+    public ResponseEntity<ApiResponse<CaptchaResponse>> getCaptcha() {
+        CaptchaResponse captcha = captchaService.generateCaptcha();
+        return ResponseEntity.ok(ApiResponse.success(captcha));
+    }
 
     /**
      * 发送验证码
@@ -61,11 +61,10 @@ public class AuthController {
             SendCodeRequest request,
             HttpServletRequest httpRequest) {
 
-        // 验证验证码
-//        if (!captchaService.validateCaptcha(request.getCaptchaKey(), request.getCaptchaCode())) {
-//            return ResponseEntity.badRequest()
-//                    .body(ApiResponse.error("验证码错误或已过期"));
-//        }
+        if (!captchaService.validateCaptcha(request.getCaptchaKey(), request.getCaptchaCode())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("图形验证码错误或已过期"));
+        }
 
         // 解析验证码类型
         VerificationCode.CodeType type;
@@ -144,9 +143,14 @@ public class AuthController {
     public ResponseEntity<ApiResponse<LoginResponse>> loginWithPassword(
             @Valid @RequestBody
             LoginRequest request,
-            HttpServletRequest httpRequest) {
+        HttpServletRequest httpRequest) {
 
         try {
+            if (!captchaService.validateCaptcha(request.getCaptchaKey(), request.getCaptchaCode())) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("图形验证码错误或已过期"));
+            }
+
             // 进行身份认证
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(

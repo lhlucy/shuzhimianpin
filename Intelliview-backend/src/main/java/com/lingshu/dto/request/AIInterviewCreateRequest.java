@@ -14,6 +14,9 @@ public class AIInterviewCreateRequest {
     @Size(max = 64, message = "请求标识不能超过64个字符")
     private String clientRequestId;
 
+    @Size(max = 20, message = "面试模式不能超过20个字符")
+    private String interviewMode;
+
     @NotBlank(message = "面试名称不能为空")
     @Size(max = 100, message = "面试名称不能超过100个字符")
     private String interviewName;

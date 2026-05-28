@@ -4,7 +4,7 @@
       <router-link to="/admin" class="brand">
         <span class="brand-mark">管</span>
         <div v-if="!collapsed" class="brand-copy">
-          <strong>Intelliview Admin</strong>
+          <strong>数智面聘</strong>
           <small>Admin Console</small>
         </div>
       </router-link>

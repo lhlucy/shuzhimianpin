@@ -120,7 +120,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Clock, Collection, House, Monitor, Star, User, VideoCamera } from '@element-plus/icons-vue'
+import { Clock, Collection, House, Monitor, Star, TrendCharts, User, VideoCamera } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import aiInterviewApi, { type AIInterviewHistoryItem } from '@/api/aiInterview'
 import practiceHistoryApi from '@/api/practiceHistory'
@@ -139,6 +139,7 @@ const navItems = [
   { label: '模拟面试', path: '/user/interview/ai/create', icon: Monitor },
   { label: '历史记录', path: '/user/history', icon: Clock },
   { label: '我的收藏', path: '/user/favorites', icon: Star },
+  { label: '成长中心', path: '/user/growth', icon: TrendCharts },
   { label: '个人中心', path: '/user/profile', icon: User }
 ]
 

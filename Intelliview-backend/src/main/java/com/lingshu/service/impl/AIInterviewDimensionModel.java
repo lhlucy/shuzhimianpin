@@ -83,6 +83,16 @@ final class AIInterviewDimensionModel {
         return scores;
     }
 
+    static Map<String, Double> defaultWeights() {
+        Map<String, Double> weights = new LinkedHashMap<>();
+        weights.put(TECHNICAL_DEPTH, 30.0);
+        weights.put(PROJECT_RELEVANCE, 25.0);
+        weights.put(PROBLEM_SOLVING, 20.0);
+        weights.put(COMMUNICATION_CLARITY, 15.0);
+        weights.put(JOB_MATCH, 10.0);
+        return weights;
+    }
+
     static boolean isComplete(Map<String, Double> scores) {
         if (scores == null) {
             return false;

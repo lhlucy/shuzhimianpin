@@ -19,6 +19,7 @@ import com.lingshu.entity.AIInterviewAnswer;
 import com.lingshu.entity.AIInterviewAssessment;
 import com.lingshu.entity.AIInterviewQuestion;
 import com.lingshu.entity.JobRole;
+import com.lingshu.entity.JobRoleSkillDimension;
 import com.lingshu.entity.Question;
 import com.lingshu.entity.UserInterviewHistory;
 import com.lingshu.entity.UserPracticeHistory;
@@ -29,11 +30,13 @@ import com.lingshu.mapper.AIInterviewAssessmentMapper;
 import com.lingshu.mapper.AIInterviewMapper;
 import com.lingshu.mapper.AIInterviewQuestionMapper;
 import com.lingshu.mapper.JobRoleMapper;
+import com.lingshu.mapper.JobRoleSkillDimensionMapper;
 import com.lingshu.mapper.QuestionMapper;
 import com.lingshu.mapper.UserInterviewHistoryMapper;
 import com.lingshu.mapper.UserPracticeHistoryMapper;
 import com.lingshu.service.AIInterviewService;
 import com.lingshu.service.CloudKnowledgeAppService;
+import com.lingshu.service.ResumeCryptoService;
 import com.lingshu.service.ResumeParseService;
 import com.lingshu.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
@@ -81,13 +84,16 @@ public class AIInterviewServiceImpl implements AIInterviewService {
     private final AIInterviewAssessmentMapper aiInterviewAssessmentMapper;
     private final QuestionMapper questionMapper;
     private final JobRoleMapper jobRoleMapper;
+    private final JobRoleSkillDimensionMapper jobRoleSkillDimensionMapper;
     private final UserPracticeHistoryMapper userPracticeHistoryMapper;
     private final UserInterviewHistoryMapper userInterviewHistoryMapper;
     private final CloudKnowledgeAppService cloudKnowledgeAppService;
     private final ResumeParseService resumeParseService;
+    private final ResumeCryptoService resumeCryptoService;
     private final SecurityUtil securityUtil;
     private final ObjectMapper objectMapper;
     private final AIInterviewStabilityGuard stabilityGuard;
+    private final EvaluationCalibrationService evaluationCalibrationService;
 
     @Override
     @Transactional
@@ -131,7 +137,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         interview.setBrushedQuestionSummary(writeJsonSilently(practicedQuestionTitles));
         interview.setVoiceEnabled(Boolean.TRUE.equals(request.getVoiceEnabled()));
         interview.setResumeFileName(blankToNull(request.getResumeFileName()));
-        interview.setResumeContent(blankToNull(resumeContent));
+        interview.setResumeContent(blankToNull(resumeCryptoService.encrypt(resumeContent)));
         interview.setInterviewerProfile(writeJsonSilently(blueprint.interviewerProfile));
         interview.setOpeningMessage(blueprint.openingMessage);
         interview.setQuestionCount(blueprint.questions.size());
@@ -379,7 +385,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 + "维度评分必须与总分基本一致，不允许总分高但多数维度低。"
                 + "岗位：" + interview.getTargetPosition()
                 + "；技术栈：" + String.join("、", readJsonList(interview.getSkillTags()))
-                + "；简历摘要：" + buildResumeDigest(interview.getResumeContent())
+                + "；简历摘要：" + buildResumeDigest(resumeCryptoService.decrypt(interview.getResumeContent()))
                 + "；当前题目：" + question.getContent()
                 + "；题目主题：" + blankToEmpty(question.getTopic())
                 + "；候选人回答：" + blankToEmpty(answerText);
@@ -422,6 +428,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                                                        List<String> practicedQuestionTitles, String resumeContent, InterviewBlueprint blueprint) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("interviewName", request.getInterviewName().trim());
+        snapshot.put("interviewMode", resolveInterviewMode(request));
         snapshot.put("targetPosition", request.getTargetPosition().trim());
         snapshot.put("interviewLanguage", resolveLanguage(request.getInterviewLanguage()));
         snapshot.put("jobRoleId", request.getJobRoleId());
@@ -511,16 +518,27 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         String focus = limitText(jobRole == null ? "" : blankToEmpty(jobRole.getInterviewFocus()), 180);
         String practiced = practicedQuestionTitles.isEmpty() ? "无" : limitText(String.join("；", practicedQuestionTitles), 180);
         String resumeDigest = limitText(buildResumeDigest(resumeContent), 220);
+        String mode = resolveInterviewMode(request);
+        String priorityRule = "CUSTOM".equals(mode)
+                ? "优先级硬约束：必须以用户选择的目标岗位和技术栈为主生成题目；简历只作为项目经历、场景追问和个性化素材。即使简历意向岗位与目标岗位冲突，也不得把面试方向切换到简历岗位。"
+                : "优先级硬约束：以简历意向、项目经历和技能关键词为主生成题目；如果页面也选择了岗位和技术栈，只作为补充约束。";
         return "只输出JSON。为模拟面试生成5题，结构："
                 + "{\"openingMessage\":\"\",\"interviewerProfile\":{\"roleName\":\"\",\"tone\":\"\",\"styleRules\":[\"\"],\"closingStyle\":\"\"},"
                 + "\"questions\":[{\"content\":\"\",\"type\":\"OPENING|PROJECT|TECHNICAL|SCENARIO|SUMMARY\",\"topic\":\"\",\"estimatedTime\":120,\"focus\":[\"\"]}]}。"
                 + "规则：第1题OPENING，第5题SUMMARY，中间覆盖项目/技术/场景；每题一句话；像真实面试官；不要答案。"
+                + priorityRule
+                + "面试模式=" + mode
                 + "岗位=" + request.getTargetPosition().trim()
                 + "；语言=" + language
                 + "；技术栈=" + String.join("、", techStacks)
                 + "；岗位重点=" + focus
                 + "；刷题=" + practiced
                 + "；简历=" + resumeDigest;
+    }
+
+    private String resolveInterviewMode(AIInterviewCreateRequest request) {
+        String mode = request == null ? "" : blankToEmpty(request.getInterviewMode()).toUpperCase(Locale.ROOT);
+        return "RESUME".equals(mode) ? "RESUME" : "CUSTOM";
     }
 
     private AIInterviewQuestion toInterviewQuestion(AIInterview interview, GeneratedQuestion generatedQuestion, int order, LocalDateTime now) {
@@ -637,10 +655,15 @@ public class AIInterviewServiceImpl implements AIInterviewService {
 
         AIInterviewAssessment newAssessment = new AIInterviewAssessment();
         newAssessment.setInterviewId(interview.getId());
-        newAssessment.setOverallScore(payload.overallScore);
+        JobRole jobRole = resolveInterviewJobRole(interview);
+        payload.weightedOverallScore = calculateWeightedOverallScore(payload.dimensionScores, jobRole, payload.overallScore);
+        newAssessment.setOverallScore(payload.weightedOverallScore);
         newAssessment.setSectionScores(writeJsonSilently(Map.of(
                 "summary", payload.summary,
                 "dimensionScores", payload.dimensionScores,
+                "competencyModel", buildCompetencyModel(jobRole),
+                "rawOverallScore", payload.overallScore,
+                "weightedOverallScore", payload.weightedOverallScore,
                 "totalQuestions", safeInt(interview.getQuestionCount()),
                 "answeredQuestions", answers.size()
         )));
@@ -651,11 +674,12 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         newAssessment.setCreatedAt(LocalDateTime.now());
         aiInterviewAssessmentMapper.insert(newAssessment);
 
-        interview.setTotalScore(payload.overallScore);
+        interview.setTotalScore(payload.weightedOverallScore);
         interview.setUpdatedAt(LocalDateTime.now());
         aiInterviewMapper.updateById(interview);
 
         upsertInterviewHistory(interview, newAssessment);
+        evaluationCalibrationService.recordInterviewCalibration(interview, newAssessment, answers);
         return toSummaryResponse(interview, newAssessment);
     }
 
@@ -740,7 +764,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 + "岗位：" + interview.getTargetPosition()
                 + "；面试语言：" + blankToEmpty(interview.getInterviewLanguage())
                 + "；技术栈：" + String.join("、", readJsonList(interview.getSkillTags()))
-                + "；简历摘要：" + buildResumeDigest(interview.getResumeContent())
+                + "；简历摘要：" + buildResumeDigest(resumeCryptoService.decrypt(interview.getResumeContent()))
                 + "；记录如下：\n" + transcript;
     }
 
@@ -998,11 +1022,14 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         int answeredQuestions = answers.size();
         int durationSeconds = safeInt(interview.getActualDuration());
 
+        Map<String, Double> dimensionScores = readDimensionScores(assessment.getSectionScores(), assessment.getOverallScore());
+
         return AIInterviewSummaryResponse.builder()
                 .interviewId(interview.getId())
                 .overallScore(assessment.getOverallScore())
                 .summary(readSummaryText(assessment.getSectionScores()))
-                .dimensionScores(readDimensionScores(assessment.getSectionScores(), assessment.getOverallScore()))
+                .dimensionScores(dimensionScores)
+                .competencyModel(buildCompetencyDimensions(interview, dimensionScores, assessment.getOverallScore()))
                 .strengths(readJsonList(assessment.getStrengths()))
                 .weaknesses(readJsonList(assessment.getWeaknesses()))
                 .suggestions(readJsonList(assessment.getSuggestions()))
@@ -1052,7 +1079,9 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         overview.put("targetPosition", interview.getTargetPosition());
         overview.put("interviewLanguage", interview.getInterviewLanguage());
         overview.put("overallScore", roundToOneDecimal(assessment.getOverallScore() == null ? 0.0 : assessment.getOverallScore()));
-        overview.put("dimensionScores", readDimensionScores(assessment.getSectionScores(), assessment.getOverallScore()));
+        Map<String, Double> dimensionScores = readDimensionScores(assessment.getSectionScores(), assessment.getOverallScore());
+        overview.put("dimensionScores", dimensionScores);
+        overview.put("competencyModel", buildCompetencyDimensions(interview, dimensionScores, assessment.getOverallScore()));
         overview.put("averageAnswerScore", roundToOneDecimal(averageAnswerScore));
         overview.put("expressionScore", roundToOneDecimal(expressionScore));
         overview.put("keywordCoverageScore", roundToOneDecimal(keywordCoverageScore));
@@ -1318,6 +1347,146 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         }
     }
 
+    private List<AIInterviewSummaryResponse.CompetencyDimension> buildCompetencyDimensions(
+            AIInterview interview,
+            Map<String, Double> dimensionScores,
+            Double fallbackScore
+    ) {
+        double fallback = fallbackScore == null ? 0.0 : fallbackScore;
+        JobRole role = resolveInterviewJobRole(interview);
+        List<JobRoleSkillDimension> roleDimensions = role == null || role.getId() == null
+                ? Collections.emptyList()
+                : jobRoleSkillDimensionMapper.findByJobRoleId(role.getId());
+        if (roleDimensions.isEmpty()) {
+            Map<String, Double> weights = AIInterviewDimensionModel.defaultWeights();
+            return weights.entrySet().stream()
+                    .map(entry -> AIInterviewSummaryResponse.CompetencyDimension.builder()
+                            .code(entry.getKey())
+                            .name(AIInterviewDimensionModel.labelOf(entry.getKey()))
+                            .weight(roundToOneDecimal(entry.getValue()))
+                            .description(defaultDimensionDescription(entry.getKey()))
+                            .score(roundToOneDecimal(dimensionScores.getOrDefault(entry.getKey(), fallback)))
+                            .build())
+                    .collect(Collectors.toList());
+        }
+        return roleDimensions.stream()
+                .map(item -> AIInterviewSummaryResponse.CompetencyDimension.builder()
+                        .code(item.getDimensionCode())
+                        .name(item.getDimensionName())
+                        .weight(item.getWeight() == null ? 0.0 : roundToOneDecimal(item.getWeight().doubleValue()))
+                        .description(item.getDescription())
+                        .score(roundToOneDecimal(resolveRoleDimensionScore(item, dimensionScores, fallback)))
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    private double resolveRoleDimensionScore(JobRoleSkillDimension dimension, Map<String, Double> scores, double fallback) {
+        if (scores == null || scores.isEmpty()) {
+            return fallback;
+        }
+        String text = (blankToEmpty(dimension.getDimensionCode()) + " "
+                + blankToEmpty(dimension.getDimensionName()) + " "
+                + blankToEmpty(dimension.getDescription())).toLowerCase(Locale.ROOT);
+        if (text.contains("project") || text.contains("项目") || text.contains("业务") || text.contains("落地") || text.contains("复盘")) {
+            return scores.getOrDefault(AIInterviewDimensionModel.PROJECT_RELEVANCE, fallback);
+        }
+        if (text.contains("design") || text.contains("设计") || text.contains("排查") || text.contains("优化")
+                || text.contains("治理") || text.contains("定位") || text.contains("问题") || text.contains("方案")) {
+            return scores.getOrDefault(AIInterviewDimensionModel.PROBLEM_SOLVING, fallback);
+        }
+        if (text.contains("表达") || text.contains("沟通") || text.contains("协同") || text.contains("产品")) {
+            return scores.getOrDefault(AIInterviewDimensionModel.COMMUNICATION_CLARITY, fallback);
+        }
+        if (text.contains("岗位") || text.contains("场景") || text.contains("匹配")) {
+            return scores.getOrDefault(AIInterviewDimensionModel.JOB_MATCH, fallback);
+        }
+        return scores.getOrDefault(AIInterviewDimensionModel.TECHNICAL_DEPTH, fallback);
+    }
+
+    private JobRole resolveInterviewJobRole(AIInterview interview) {
+        if (interview == null) {
+            return null;
+        }
+        if (interview.getJobRoleId() != null) {
+            JobRole role = jobRoleMapper.selectById(interview.getJobRoleId());
+            if (role != null) {
+                return role;
+            }
+        }
+        String targetPosition = blankToEmpty(interview.getTargetPosition());
+        if (!StringUtils.hasText(targetPosition)) {
+            return null;
+        }
+        String normalizedTarget = normalizeRoleText(targetPosition);
+        return jobRoleMapper.findActiveRoles().stream()
+                .filter(role -> normalizedTarget.contains(normalizeRoleText(role.getName()))
+                        || normalizeRoleText(role.getName()).contains(normalizedTarget)
+                        || normalizedTarget.contains(normalizeRoleText(role.getCode())))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private String normalizeRoleText(String value) {
+        return blankToEmpty(value)
+                .toLowerCase(Locale.ROOT)
+                .replace("工程师", "")
+                .replace("开发", "")
+                .replace("/", "")
+                .replace("-", "")
+                .replace("_", "")
+                .replace(" ", "");
+    }
+
+    private String defaultDimensionDescription(String key) {
+        switch (key) {
+            case AIInterviewDimensionModel.TECHNICAL_DEPTH:
+                return "核心原理、关键机制、边界条件";
+            case AIInterviewDimensionModel.PROJECT_RELEVANCE:
+                return "项目经历、技术栈和岗位场景结合度";
+            case AIInterviewDimensionModel.PROBLEM_SOLVING:
+                return "拆解问题、说明思路、对比方案";
+            case AIInterviewDimensionModel.COMMUNICATION_CLARITY:
+                return "结构化表达、逻辑连贯、重点明确";
+            case AIInterviewDimensionModel.JOB_MATCH:
+                return "回答贴合目标岗位要求的程度";
+            default:
+                return "";
+        }
+    }
+
+    private double calculateWeightedOverallScore(Map<String, Double> dimensionScores, JobRole jobRole, double fallbackScore) {
+        Map<String, Double> weights = buildCompetencyModel(jobRole);
+        double weightSum = weights.values().stream().mapToDouble(Double::doubleValue).sum();
+        if (dimensionScores == null || dimensionScores.isEmpty() || weightSum <= 0) {
+            return roundToOneDecimal(fallbackScore);
+        }
+        double score = 0.0;
+        for (Map.Entry<String, Double> entry : weights.entrySet()) {
+            score += dimensionScores.getOrDefault(entry.getKey(), fallbackScore) * entry.getValue();
+        }
+        return roundToOneDecimal(score / weightSum);
+    }
+
+    private Map<String, Double> buildCompetencyModel(JobRole jobRole) {
+        Map<String, Double> defaults = AIInterviewDimensionModel.defaultWeights();
+        if (jobRole == null || !StringUtils.hasText(jobRole.getCompetencyModel())) {
+            return defaults;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(jobRole.getCompetencyModel());
+            JsonNode source = root.has("weights") ? root.path("weights") : root;
+            Map<String, Double> weights = new LinkedHashMap<>(defaults);
+            for (String key : AIInterviewDimensionModel.keys()) {
+                if (source.has(key) && source.get(key).isNumber()) {
+                    weights.put(key, Math.max(0.0, source.get(key).asDouble()));
+                }
+            }
+            return weights;
+        } catch (Exception ex) {
+            return defaults;
+        }
+    }
+
     private String readObjectText(Object value) {
         if (value instanceof String) {
             return ((String) value).trim();
@@ -1437,6 +1606,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
 
     private static class SummaryPayload {
         private double overallScore;
+        private double weightedOverallScore;
         private String summary;
         private List<String> strengths;
         private List<String> weaknesses;

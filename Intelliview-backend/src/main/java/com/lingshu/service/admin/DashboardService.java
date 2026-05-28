@@ -38,4 +38,10 @@ public interface DashboardService {
      */
     List<Map<String, Object>> getWeaknessTags();
 
+    /**
+     * 获取 AI 面试应用成效指标
+     * @return 留存、频次、分数提升等统计
+     */
+    Map<String, Object> getOutcomeMetrics();
+
 }

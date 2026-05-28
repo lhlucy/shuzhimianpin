@@ -65,6 +65,7 @@ public class QuestionDetailResponse {
     // 分类和标签
     private Long categoryId;
     private String categoryName;
+    private Long primaryJobRoleId;
     private List<QuestionResponse.TagResponse> tags = new ArrayList<>();
 
     // 分类对象（兼容前端）
@@ -280,6 +281,14 @@ public class QuestionDetailResponse {
 
     public void setCategoryName(String categoryName) {
         this.categoryName = categoryName;
+    }
+
+    public Long getPrimaryJobRoleId() {
+        return primaryJobRoleId;
+    }
+
+    public void setPrimaryJobRoleId(Long primaryJobRoleId) {
+        this.primaryJobRoleId = primaryJobRoleId;
     }
 
     public List<QuestionResponse.TagResponse> getTags() {

@@ -33,6 +33,21 @@ public class UploadStorageService {
         return uploadRoot;
     }
 
+    public void deleteStoredFile(String fileUrl) {
+        if (!StringUtils.hasText(fileUrl) || !fileUrl.startsWith("/uploads/")) {
+            return;
+        }
+        try {
+            String relativePath = fileUrl.substring("/uploads/".length());
+            Path target = uploadRoot.resolve(relativePath).normalize();
+            if (target.startsWith(uploadRoot)) {
+                Files.deleteIfExists(target);
+            }
+        } catch (IOException ex) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "文件删除失败");
+        }
+    }
+
     private StoredFile store(String relativeDir, MultipartFile file, Set<String> allowedExtensions) {
         if (file == null || file.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST.getCode(), "上传文件不能为空");

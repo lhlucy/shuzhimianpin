@@ -37,6 +37,16 @@
             <el-input :model-value="String(questionId || '')" disabled />
           </el-form-item>
         </div>
+        <el-form-item label="关联岗位">
+          <el-select v-model="formData.primaryJobRoleId" placeholder="选择后会进入用户端对应岗位题库" clearable filterable>
+            <el-option
+              v-for="role in jobRoles"
+              :key="role.id"
+              :label="role.name"
+              :value="role.id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="题目描述">
           <el-input
             v-model="formData.description"
@@ -66,6 +76,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import service from '@/utils/axios'
+import jobRoleApi, { type JobRoleOption } from '@/api/jobRoles'
 import { MdEditor } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 
@@ -74,12 +85,14 @@ const router = useRouter()
 
 const loading = ref(false)
 const saving = ref(false)
+const jobRoles = ref<JobRoleOption[]>([])
 const questionId = computed(() => Number(route.params.questionId || 0))
 const bankId = computed(() => Number(route.params.bankId || 0))
 
 const formData = ref({
   title: '',
   difficulty: 'MEDIUM',
+  primaryJobRoleId: undefined as number | undefined,
   description: '',
   answer: ''
 })
@@ -106,6 +119,7 @@ const fetchQuestion = async () => {
     formData.value = {
       title: detail.title || '',
       difficulty: detail.difficulty || 'MEDIUM',
+      primaryJobRoleId: detail.primaryJobRoleId,
       description: detail.description || detail.questionText || '',
       answer: detail.answer || detail.answerText || ''
     }
@@ -135,6 +149,9 @@ const saveQuestion = async () => {
       description: formData.value.description,
       questionText: formData.value.description || formData.value.title.trim(),
       answerText: formData.value.answer,
+      primaryJobRoleId: formData.value.primaryJobRoleId,
+      isForPractice: true,
+      isForInterview: true,
       isVisible: true
     })
     ElMessage.success('题目更新成功')
@@ -146,7 +163,18 @@ const saveQuestion = async () => {
   }
 }
 
-onMounted(fetchQuestion)
+const loadJobRoles = async () => {
+  try {
+    jobRoles.value = await jobRoleApi.listJobRoles()
+  } catch (error) {
+    console.error('加载岗位列表失败:', error)
+  }
+}
+
+onMounted(() => {
+  loadJobRoles()
+  fetchQuestion()
+})
 </script>
 
 <style scoped>

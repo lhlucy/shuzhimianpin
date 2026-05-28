@@ -323,7 +323,7 @@ public class QuestionService {
         category.setId(question.getCategoryId());
         category.setName(categoryName);
         
-        return QuestionDetailResponse.builder()
+        QuestionDetailResponse response = QuestionDetailResponse.builder()
                 .id(question.getId())
                 .title(question.getTitle())
                 .slug(question.getSlug())
@@ -353,6 +353,8 @@ public class QuestionService {
                 .createdAt(question.getCreatedAt())
                 .updatedAt(question.getUpdatedAt())
                 .build();
+        response.setPrimaryJobRoleId(question.getPrimaryJobRoleId());
+        return response;
     }
     /**
      * 根据slug获取问题
