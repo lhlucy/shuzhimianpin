@@ -18,12 +18,43 @@
       <section class="growth-hero">
         <div>
           <span>Growth Center</span>
-          <h1>成长中心</h1>
-          <p>勾选一次或多次面试记录，系统会基于每场报告里的五个能力维度生成趋势线，并把短板建议追溯到具体题目证据。</p>
+          <h1>{{ activeRole.name }}成长中心</h1>
+          <p>围绕一个重点岗位持续训练，系统会按岗位评分模型生成加权总分和专属能力曲线，同时保留其他岗位的数据概览。</p>
         </div>
         <div class="hero-stat">
           <strong>{{ selectedCompletedRecords.length }}</strong>
-          <span>已纳入曲线</span>
+          <span>重点岗位样本</span>
+        </div>
+      </section>
+
+      <section class="role-focus-panel">
+        <div class="role-focus-head">
+          <div>
+            <span>重点准备岗位</span>
+            <h2>{{ activeRole.name }}</h2>
+            <p>{{ activeRole.description }}</p>
+          </div>
+          <div class="role-switcher" aria-label="切换重点岗位">
+            <button
+              v-for="role in roleOptions"
+              :key="role.key"
+              type="button"
+              :class="{ active: role.key === activeRole.key }"
+              @click="selectRole(role.key)"
+            >
+              <strong>{{ role.name }}</strong>
+              <small>{{ role.count }} 场</small>
+            </button>
+          </div>
+        </div>
+        <div class="weight-grid">
+          <article v-for="dimension in activeDimensions" :key="dimension.key" class="weight-card">
+            <span :style="{ backgroundColor: dimension.color }"></span>
+            <div>
+              <strong>{{ dimension.label }}</strong>
+              <small>{{ dimension.weight }}%</small>
+            </div>
+          </article>
         </div>
       </section>
 
@@ -32,16 +63,16 @@
           <div class="panel-head">
             <div>
               <h2>面试记录</h2>
-              <p>选择已完成并生成报告的记录</p>
+              <p>选择{{ activeRole.name }}已完成并生成报告的记录</p>
             </div>
-            <button type="button" @click="selectRecentCompleted">选择最近 5 场</button>
+            <button type="button" @click="selectRecentCompleted">选择该岗位最近 5 场</button>
           </div>
 
           <div v-if="loading" class="loading-box">
             <el-skeleton :rows="8" animated />
           </div>
           <div v-else class="record-list">
-            <label v-for="item in completedRecords" :key="item.interviewId" class="record-row" :class="{ checked: selectedIds.includes(item.interviewId) }">
+            <label v-for="item in focusedCompletedRecords" :key="item.interviewId" class="record-row" :class="{ checked: selectedIds.includes(item.interviewId) }">
               <input v-model="selectedIds" type="checkbox" :value="item.interviewId" />
               <div>
                 <strong>{{ item.title || item.targetPosition || '模拟面试' }}</strong>
@@ -49,15 +80,15 @@
               </div>
               <em>{{ Math.round(item.totalScore || 0) }}</em>
             </label>
-            <el-empty v-if="!completedRecords.length" description="暂无已完成面试报告" />
+            <el-empty v-if="!focusedCompletedRecords.length" description="该岗位暂无已完成面试报告" />
           </div>
         </article>
 
         <article class="chart-panel">
           <div class="panel-head">
             <div>
-              <h2>五维成长曲线</h2>
-              <p>技术深度、项目匹配、问题分析、表达清晰、岗位匹配分别成线</p>
+              <h2>{{ activeRole.name }}岗位成长曲线</h2>
+              <p>{{ roleModelSummary }}，曲线按所选面试报告动态折算</p>
             </div>
             <div class="chart-tools">
               <span>{{ chartPoints.length }} 个样本</span>
@@ -82,7 +113,8 @@
               <thead>
                 <tr>
                   <th>面试</th>
-                  <th v-for="dimension in DIMENSIONS" :key="dimension.key">{{ dimension.label }}</th>
+                  <th>加权总分</th>
+                  <th v-for="dimension in activeDimensions" :key="dimension.key">{{ dimension.label }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -91,6 +123,7 @@
                     <strong>{{ row.title }}</strong>
                     <span>{{ row.time }}</span>
                   </td>
+                  <td><i>{{ row.weightedScore }}</i></td>
                   <td v-for="score in row.scores" :key="score.label">
                     <i :style="{ color: score.color }">{{ score.value }}</i>
                   </td>
@@ -99,6 +132,32 @@
             </table>
           </div>
         </article>
+      </section>
+
+      <section class="other-role-panel">
+        <div class="panel-head">
+          <div>
+            <h2>其他岗位数据</h2>
+            <p>保留横向岗位覆盖，点击后可切换为新的重点岗位曲线。</p>
+          </div>
+        </div>
+        <div class="role-stat-grid">
+          <button
+            v-for="role in otherRoleStats"
+            :key="role.key"
+            type="button"
+            class="role-stat-card"
+            @click="selectRole(role.key)"
+          >
+            <span>{{ role.name }}</span>
+            <strong>{{ role.count }} 场</strong>
+            <small>平均 {{ role.averageScore }} · 最近 {{ role.latestScore }}</small>
+          </button>
+          <article v-if="!otherRoleStats.length" class="empty-other-role">
+            <strong>暂无其他岗位样本</strong>
+            <p>完成更多岗位面试后，这里会展示岗位覆盖面。</p>
+          </article>
+        </div>
       </section>
 
       <section class="report-panel">
@@ -166,13 +225,103 @@ import aiInterviewApi, { type AIInterviewHistoryItem, type AIInterviewSummary } 
 echarts.use([LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
 
 const STORAGE_KEY = 'growth_curve_interview_ids'
-const DIMENSIONS = [
-  { key: 'technicalDepth', label: '技术深度', color: '#e85d3f' },
-  { key: 'projectRelevance', label: '项目匹配', color: '#2f6fdb' },
-  { key: 'problemSolving', label: '问题分析', color: '#199b6a' },
-  { key: 'communicationClarity', label: '表达清晰', color: '#b07a10' },
-  { key: 'jobMatch', label: '岗位匹配', color: '#7a54c9' }
+type GrowthDimension = {
+  key: string
+  label: string
+  color: string
+  weight: number
+  sources: Partial<Record<string, number>>
+}
+
+type RoleModel = {
+  key: string
+  name: string
+  description: string
+  aliases: string[]
+  dimensions: GrowthDimension[]
+}
+
+const LEGACY_DIMENSIONS: GrowthDimension[] = [
+  { key: 'technicalDepth', label: '技术深度', color: '#e85d3f', weight: 22, sources: { technicalDepth: 1 } },
+  { key: 'projectRelevance', label: '项目匹配', color: '#2f6fdb', weight: 22, sources: { projectRelevance: 1 } },
+  { key: 'problemSolving', label: '问题分析', color: '#199b6a', weight: 20, sources: { problemSolving: 1 } },
+  { key: 'communicationClarity', label: '表达清晰', color: '#b07a10', weight: 18, sources: { communicationClarity: 1 } },
+  { key: 'jobMatch', label: '岗位匹配', color: '#7a54c9', weight: 18, sources: { jobMatch: 1 } }
 ]
+
+const ROLE_MODELS: RoleModel[] = [
+  {
+    key: 'java_backend',
+    name: 'Java后端开发',
+    description: '重点观察 Java 基础、项目经验、系统设计和编码落地能力，适合校招与 0-3 年后端岗位。',
+    aliases: ['java', '后端', '服务端', 'spring', 'backend'],
+    dimensions: [
+      { key: 'basicKnowledge', label: '基础知识', color: '#e85d3f', weight: 30, sources: { technicalDepth: 0.72, problemSolving: 0.28 } },
+      { key: 'projectExperience', label: '项目经验', color: '#2f6fdb', weight: 25, sources: { projectRelevance: 0.78, jobMatch: 0.22 } },
+      { key: 'systemDesign', label: '系统设计', color: '#199b6a', weight: 25, sources: { technicalDepth: 0.35, problemSolving: 0.4, jobMatch: 0.25 } },
+      { key: 'codingAbility', label: '编码能力', color: '#b07a10', weight: 20, sources: { problemSolving: 0.55, technicalDepth: 0.3, communicationClarity: 0.15 } }
+    ]
+  },
+  {
+    key: 'frontend',
+    name: '前端开发',
+    description: '围绕 JS/CSS 基础、框架能力、工程化、交互还原和性能优化判断前端岗位准备度。',
+    aliases: ['前端', 'vue', 'react', 'javascript', 'web'],
+    dimensions: [
+      { key: 'frontendBasics', label: 'JS/CSS基础', color: '#e85d3f', weight: 30, sources: { technicalDepth: 0.7, problemSolving: 0.3 } },
+      { key: 'frameworkAbility', label: '框架能力', color: '#2f6fdb', weight: 25, sources: { technicalDepth: 0.55, projectRelevance: 0.45 } },
+      { key: 'engineering', label: '工程化', color: '#199b6a', weight: 20, sources: { projectRelevance: 0.55, problemSolving: 0.45 } },
+      { key: 'interaction', label: '交互还原', color: '#b07a10', weight: 15, sources: { communicationClarity: 0.45, projectRelevance: 0.35, jobMatch: 0.2 } },
+      { key: 'performance', label: '性能优化', color: '#7a54c9', weight: 10, sources: { technicalDepth: 0.45, problemSolving: 0.55 } }
+    ]
+  },
+  {
+    key: 'algorithm',
+    name: '算法工程师',
+    description: '更关注数学基础、算法实现、模型理解和工程落地，适合算法、推荐、搜索和机器学习岗位。',
+    aliases: ['算法', '机器学习', '深度学习', '推荐', '搜索', 'cv', 'nlp'],
+    dimensions: [
+      { key: 'mathBasics', label: '数学基础', color: '#e85d3f', weight: 25, sources: { technicalDepth: 0.65, problemSolving: 0.35 } },
+      { key: 'algorithmCoding', label: '算法实现', color: '#2f6fdb', weight: 30, sources: { problemSolving: 0.62, technicalDepth: 0.38 } },
+      { key: 'modelUnderstanding', label: '模型理解', color: '#199b6a', weight: 25, sources: { technicalDepth: 0.58, communicationClarity: 0.22, jobMatch: 0.2 } },
+      { key: 'engineeringLanding', label: '工程落地', color: '#b07a10', weight: 20, sources: { projectRelevance: 0.58, jobMatch: 0.24, problemSolving: 0.18 } }
+    ]
+  },
+  {
+    key: 'ai_large_model',
+    name: '大模型应用工程师',
+    description: '关注 Agent、RAG、提示词工程、模型调用和业务落地，突出新兴 AI 应用岗位的训练主线。',
+    aliases: ['大模型', 'llm', 'rag', 'agent', 'ai应用', '提示词'],
+    dimensions: [
+      { key: 'modelBasics', label: '模型基础', color: '#e85d3f', weight: 25, sources: { technicalDepth: 0.62, communicationClarity: 0.18, problemSolving: 0.2 } },
+      { key: 'ragAgent', label: 'RAG/Agent', color: '#2f6fdb', weight: 30, sources: { technicalDepth: 0.42, problemSolving: 0.4, projectRelevance: 0.18 } },
+      { key: 'promptEngineering', label: '提示词工程', color: '#199b6a', weight: 20, sources: { problemSolving: 0.45, communicationClarity: 0.35, jobMatch: 0.2 } },
+      { key: 'businessLanding', label: '业务落地', color: '#b07a10', weight: 25, sources: { projectRelevance: 0.5, jobMatch: 0.35, communicationClarity: 0.15 } }
+    ]
+  },
+  {
+    key: 'qa_test',
+    name: '测试开发工程师',
+    description: '以测试理论、自动化能力、编码能力和质量保障为核心，适合测试开发和质量平台岗位。',
+    aliases: ['测试', 'qa', '质量', '自动化测试'],
+    dimensions: [
+      { key: 'testingTheory', label: '测试理论', color: '#e85d3f', weight: 25, sources: { technicalDepth: 0.42, communicationClarity: 0.25, jobMatch: 0.33 } },
+      { key: 'automation', label: '自动化能力', color: '#2f6fdb', weight: 30, sources: { technicalDepth: 0.45, problemSolving: 0.38, projectRelevance: 0.17 } },
+      { key: 'codingAbility', label: '编码能力', color: '#199b6a', weight: 20, sources: { problemSolving: 0.55, technicalDepth: 0.45 } },
+      { key: 'qualityAssurance', label: '质量保障', color: '#b07a10', weight: 25, sources: { projectRelevance: 0.42, jobMatch: 0.34, communicationClarity: 0.24 } }
+    ]
+  }
+]
+
+const FALLBACK_ROLE_MODEL: RoleModel = {
+  key: 'general',
+  name: '综合技术岗位',
+  description: '用于暂未命中特定模型的岗位，沿用平台通用五维能力作为成长曲线。',
+  aliases: [],
+  dimensions: LEGACY_DIMENSIONS
+}
+
+const DEFAULT_ROLE = ROLE_MODELS[0]
 
 const navItems = [
   { label: '首页', path: '/user', icon: House },
@@ -189,6 +338,7 @@ const summaryLoading = ref(false)
 const chartView = ref<'line' | 'table'>('line')
 const records = ref<AIInterviewHistoryItem[]>([])
 const selectedIds = ref<number[]>([])
+const selectedRoleKey = ref('')
 const summaries = ref<Record<number, AIInterviewSummary>>({})
 const lineChartRef = ref<HTMLElement>()
 let chart: echarts.ECharts | null = null
@@ -196,12 +346,51 @@ let summaryLoadSeq = 0
 const router = useRouter()
 
 const completedRecords = computed(() => records.value.filter((item) => item.status === 'COMPLETED'))
-const selectedCompletedRecords = computed(() => completedRecords.value.filter((item) => selectedIds.value.includes(item.interviewId)))
+const roleGroups = computed(() => {
+  const groups = new Map<string, { model: RoleModel, records: AIInterviewHistoryItem[] }>()
+  for (const record of completedRecords.value) {
+    const model = findRoleModel(record.targetPosition || record.title)
+    const group = groups.get(model.key) || { model, records: [] }
+    group.records.push(record)
+    groups.set(model.key, group)
+  }
+  if (!groups.size) {
+    ROLE_MODELS.slice(0, 4).forEach((model) => groups.set(model.key, { model, records: [] }))
+  }
+  return [...groups.values()].sort((a, b) => b.records.length - a.records.length)
+})
+const roleOptions = computed(() => roleGroups.value.map((group) => ({
+  key: group.model.key,
+  name: group.model.name,
+  count: group.records.length
+})))
+const activeRole = computed(() => {
+  const matched = roleGroups.value.find((group) => group.model.key === selectedRoleKey.value)
+  return matched?.model || roleGroups.value[0]?.model || DEFAULT_ROLE
+})
+const activeDimensions = computed(() => activeRole.value.dimensions)
+const focusedCompletedRecords = computed(() => completedRecords.value.filter((item) => findRoleModel(item.targetPosition || item.title).key === activeRole.value.key))
+const selectedCompletedRecords = computed(() => focusedCompletedRecords.value.filter((item) => selectedIds.value.includes(item.interviewId)))
 const chartPoints = computed(() => selectedCompletedRecords.value
   .slice()
   .sort((a, b) => new Date(a.endedAt || a.createdAt).getTime() - new Date(b.endedAt || b.createdAt).getTime())
   .filter((item) => summaries.value[item.interviewId])
 )
+const roleModelSummary = computed(() => activeDimensions.value.map((dimension) => `${dimension.label}${dimension.weight}%`).join(' + '))
+const otherRoleStats = computed(() => roleGroups.value
+  .filter((group) => group.model.key !== activeRole.value.key && group.records.length)
+  .map((group) => {
+    const sorted = group.records.slice().sort((a, b) => new Date(b.endedAt || b.createdAt).getTime() - new Date(a.endedAt || a.createdAt).getTime())
+    const scores = group.records.map((item) => Number(item.totalScore || 0)).filter((score) => score > 0)
+    const average = scores.length ? scores.reduce((sum, score) => sum + score, 0) / scores.length : 0
+    return {
+      key: group.model.key,
+      name: group.model.name,
+      count: group.records.length,
+      averageScore: Math.round(average),
+      latestScore: Math.round(Number(sorted[0]?.totalScore || 0))
+    }
+  }))
 
 const scoreRows = computed(() => chartPoints.value.map((item) => {
   const summary = summaries.value[item.interviewId]
@@ -209,10 +398,11 @@ const scoreRows = computed(() => chartPoints.value.map((item) => {
     id: item.interviewId,
     title: item.title || item.targetPosition || '模拟面试',
     time: formatDateTime(item.endedAt || item.createdAt),
-    scores: DIMENSIONS.map((dimension) => ({
+    weightedScore: calculateWeightedScore(summary),
+    scores: activeDimensions.value.map((dimension) => ({
       label: dimension.label,
       color: dimension.color,
-      value: Math.round(Number(summary?.dimensionScores?.[dimension.key] || 0))
+      value: calculateDimensionScore(summary, dimension)
     }))
   }
 }))
@@ -232,7 +422,7 @@ const weaknessInsights = computed(() => {
   for (const record of chartPoints.value) {
     const summary = summaries.value[record.interviewId]
     for (const review of summary.questionReviews || []) {
-      const weakDimension = DIMENSIONS
+      const weakDimension = LEGACY_DIMENSIONS
         .map((dimension) => ({ ...dimension, score: Number(review.dimensionScores?.[dimension.key] ?? 100) }))
         .sort((a, b) => a.score - b.score)[0]
       const missing = (review.missingKeywords || []).slice(0, 3).join('、')
@@ -266,6 +456,37 @@ function buildSolutionReason(key: string, role?: string) {
   return map[key] || '该短板会影响面试官对能力稳定性的判断，建议结合原报告专项补强。'
 }
 
+function normalizeRoleText(value?: string) {
+  return (value || '').toLowerCase().replace(/\s+/g, '')
+}
+
+function findRoleModel(value?: string) {
+  const text = normalizeRoleText(value)
+  if (!text) return FALLBACK_ROLE_MODEL
+  return ROLE_MODELS.find((model) => model.aliases.some((alias) => text.includes(normalizeRoleText(alias)))) || FALLBACK_ROLE_MODEL
+}
+
+function selectRole(key: string) {
+  selectedRoleKey.value = key
+  selectRecentCompleted()
+}
+
+function calculateDimensionScore(summary: AIInterviewSummary | undefined, dimension: GrowthDimension) {
+  const scores = summary?.dimensionScores || {}
+  const total = Object.entries(dimension.sources).reduce((sum, [sourceKey, weight]) => {
+    return sum + Number(scores[sourceKey] || 0) * Number(weight || 0)
+  }, 0)
+  return Math.round(total)
+}
+
+function calculateWeightedScore(summary: AIInterviewSummary | undefined) {
+  const totalWeight = activeDimensions.value.reduce((sum, dimension) => sum + dimension.weight, 0) || 100
+  const totalScore = activeDimensions.value.reduce((sum, dimension) => {
+    return sum + calculateDimensionScore(summary, dimension) * (dimension.weight / totalWeight)
+  }, 0)
+  return Math.round(totalScore)
+}
+
 function formatDateTime(value?: string) {
   if (!value) return '暂无时间'
   const date = new Date(value)
@@ -287,7 +508,7 @@ function persistSelectedIds() {
 }
 
 function selectRecentCompleted() {
-  selectedIds.value = completedRecords.value.slice(0, 5).map((item) => item.interviewId)
+  selectedIds.value = focusedCompletedRecords.value.slice(0, 5).map((item) => item.interviewId)
 }
 
 async function loadSummaries() {
@@ -342,22 +563,34 @@ async function renderChart() {
   if (!chart) chart = echarts.init(lineChartRef.value)
   const labels = chartPoints.value.map((item, index) => `${index + 1}. ${formatDateTime(item.endedAt || item.createdAt)}`)
   chart.setOption({
-    color: DIMENSIONS.map((item) => item.color),
+    color: ['#252936', ...activeDimensions.value.map((item) => item.color)],
     tooltip: { trigger: 'axis' },
     legend: { top: 0, icon: 'roundRect', textStyle: { color: '#435064', fontWeight: 700 } },
     grid: { left: 36, right: 24, top: 54, bottom: 34 },
     xAxis: { type: 'category', boundaryGap: false, data: labels, axisLabel: { color: '#788397' } },
     yAxis: { type: 'value', min: 0, max: 100, splitLine: { lineStyle: { color: '#edf1f6' } }, axisLabel: { color: '#788397' } },
-    series: DIMENSIONS.map((dimension) => ({
-      name: dimension.label,
-      type: 'line',
-      smooth: true,
-      symbol: 'circle',
-      symbolSize: 7,
-      lineStyle: { width: 3 },
-      emphasis: { focus: 'series' },
-      data: chartPoints.value.map((item) => Math.round(Number(summaries.value[item.interviewId]?.dimensionScores?.[dimension.key] || 0)))
-    }))
+    series: [
+      {
+        name: '加权总分',
+        type: 'line',
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 8,
+        lineStyle: { width: 4 },
+        emphasis: { focus: 'series' },
+        data: chartPoints.value.map((item) => calculateWeightedScore(summaries.value[item.interviewId]))
+      },
+      ...activeDimensions.value.map((dimension) => ({
+        name: dimension.label,
+        type: 'line',
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 7,
+        lineStyle: { width: 3 },
+        emphasis: { focus: 'series' },
+        data: chartPoints.value.map((item) => calculateDimensionScore(summaries.value[item.interviewId], dimension))
+      }))
+    ]
   })
   chart.resize()
 }
@@ -371,8 +604,11 @@ async function loadPage() {
   try {
     readStoredIds()
     records.value = await aiInterviewApi.getInterviewHistory(100)
-    if (!selectedIds.value.length) {
-      selectedIds.value = completedRecords.value.slice(0, 3).map((item) => item.interviewId)
+    if (!selectedRoleKey.value) {
+      selectedRoleKey.value = roleGroups.value[0]?.model.key || DEFAULT_ROLE.key
+    }
+    if (!selectedIds.value.length || !selectedIds.value.some((id) => focusedCompletedRecords.value.some((item) => item.interviewId === id))) {
+      selectedIds.value = focusedCompletedRecords.value.slice(0, 5).map((item) => item.interviewId)
     }
     await loadSummaries()
   } finally {
@@ -392,6 +628,14 @@ watch(chartView, async (value) => {
   }
   chart?.dispose()
   chart = null
+})
+
+watch(selectedRoleKey, async () => {
+  if (!focusedCompletedRecords.value.some((item) => selectedIds.value.includes(item.interviewId))) {
+    selectRecentCompleted()
+    return
+  }
+  await loadSummaries()
 })
 
 watch(
@@ -553,7 +797,9 @@ onBeforeUnmount(() => {
 
 .record-panel,
 .chart-panel,
-.report-panel {
+.report-panel,
+.role-focus-panel,
+.other-role-panel {
   border: 1px solid #e7ecf4;
   border-radius: 12px;
   background: #ffffff;
@@ -562,8 +808,133 @@ onBeforeUnmount(() => {
 
 .record-panel,
 .chart-panel,
-.report-panel {
+.report-panel,
+.role-focus-panel,
+.other-role-panel {
   padding: 20px;
+}
+
+.role-focus-panel,
+.other-role-panel {
+  margin-top: 20px;
+}
+
+.role-focus-head {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(360px, 1.2fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.role-focus-head span {
+  color: #e85d3f;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.role-focus-head h2 {
+  margin-top: 8px;
+  color: #252936;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.role-focus-head p {
+  margin-top: 10px;
+  color: #6b7586;
+  line-height: 1.75;
+  font-size: 13px;
+}
+
+.role-switcher {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.role-switcher button,
+.role-stat-card {
+  border: 1px solid #e7ecf4;
+  border-radius: 8px;
+  background: #fbfcfe;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.role-switcher button {
+  min-height: 58px;
+  padding: 10px 12px;
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+  color: #252936;
+  text-align: left;
+}
+
+.role-switcher button.active,
+.role-switcher button:hover,
+.role-stat-card:hover {
+  border-color: rgba(232, 93, 63, 0.42);
+  box-shadow: 0 12px 24px rgba(27, 36, 56, 0.06);
+  transform: translateY(-1px);
+}
+
+.role-switcher button.active {
+  background: #fff4ef;
+}
+
+.role-switcher strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.role-switcher small {
+  color: #8d98aa;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.weight-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.weight-card {
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #edf1f6;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.weight-card > span {
+  width: 10px;
+  height: 34px;
+  flex: none;
+  border-radius: 999px;
+}
+
+.weight-card strong,
+.weight-card small {
+  display: block;
+}
+
+.weight-card strong {
+  color: #252936;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.weight-card small {
+  margin-top: 4px;
+  color: #8d98aa;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .panel-head {
@@ -801,6 +1172,58 @@ onBeforeUnmount(() => {
   margin-top: 20px;
 }
 
+.role-stat-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.role-stat-card {
+  min-height: 104px;
+  padding: 16px;
+  display: grid;
+  align-content: space-between;
+  justify-items: start;
+  color: #252936;
+  text-align: left;
+}
+
+.role-stat-card span {
+  color: #657184;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.role-stat-card strong {
+  color: #e85d3f;
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.role-stat-card small {
+  color: #8d98aa;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.empty-other-role {
+  grid-column: 1 / -1;
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  border: 1px dashed #dbe2ed;
+  border-radius: 10px;
+  color: #8d98aa;
+  text-align: center;
+}
+
+.empty-other-role strong {
+  color: #252936;
+}
+
 .insight-grid {
   margin-top: 18px;
   display: grid;
@@ -900,8 +1323,15 @@ onBeforeUnmount(() => {
   }
 
   .workspace,
-  .insight-grid {
+  .insight-grid,
+  .role-focus-head,
+  .role-stat-grid {
     grid-template-columns: 1fr;
+  }
+
+  .role-switcher,
+  .weight-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -923,6 +1353,11 @@ onBeforeUnmount(() => {
   .chart-tools {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .role-switcher,
+  .weight-grid {
+    grid-template-columns: 1fr;
   }
 
   .line-chart {
