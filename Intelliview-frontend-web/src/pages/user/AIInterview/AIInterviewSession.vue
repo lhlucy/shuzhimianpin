@@ -65,9 +65,47 @@
             <strong>简历摘要</strong>
             <p>{{ sessionResume.summary || '暂无摘要' }}</p>
           </div>
-          <div class="resume-content">
-            <strong>解析内容</strong>
-            <pre>{{ sessionResume.content || '暂无可展示的解析内容' }}</pre>
+          <div class="resume-section-list">
+            <section v-for="section in parsedResumeSections" :key="section.key" class="resume-section-card">
+              <strong>{{ section.title }}</strong>
+              <div v-if="section.key === 'project' && section.projects?.length" class="resume-project-list">
+                <article v-for="project in section.projects" :key="`${project.name}-${project.time}-${project.description}`" class="resume-project-card">
+                  <div class="resume-project-head">
+                    <h2>{{ project.name || '未命名项目' }}</h2>
+                    <span v-if="project.time">{{ project.time }}</span>
+                  </div>
+                  <div class="resume-project-meta">
+                    <span v-if="project.role">角色：{{ project.role }}</span>
+                    <span v-if="project.techStack.length">技术栈：{{ project.techStack.join(' / ') }}</span>
+                  </div>
+                  <p v-if="project.description" class="resume-project-desc">{{ project.description }}</p>
+                  <div v-if="project.responsibilities.length" class="resume-project-block">
+                    <b>负责内容</b>
+                    <ul>
+                      <li v-for="item in project.responsibilities" :key="`resp-${item}`">{{ item }}</li>
+                    </ul>
+                  </div>
+                  <div v-if="project.achievements.length" class="resume-project-block">
+                    <b>成果亮点</b>
+                    <ul>
+                      <li v-for="item in project.achievements" :key="`ach-${item}`">{{ item }}</li>
+                    </ul>
+                  </div>
+                  <div v-if="project.items.length" class="resume-project-block">
+                    <b>补充信息</b>
+                    <ul>
+                      <li v-for="item in project.items" :key="`extra-${item}`">{{ item }}</li>
+                    </ul>
+                  </div>
+                </article>
+              </div>
+              <template v-else>
+                <ul v-if="section.items.length > 1">
+                  <li v-for="item in section.items" :key="item">{{ item }}</li>
+                </ul>
+                <p v-else>{{ section.items[0] || '暂无' }}</p>
+              </template>
+            </section>
           </div>
         </article>
 
@@ -94,7 +132,7 @@
             <span class="head-chip">{{ session?.targetPosition || '加载中' }}</span>
             <span class="head-chip">{{ currentTechLabel }}</span>
             <span class="head-chip time">{{ elapsedLabel }}</span>
-            <span class="head-chip">第 {{ currentOrder }} / {{ session?.questionCount || 0 }} 题</span>
+            <span class="head-chip">第 {{ currentOrder }} / {{ effectiveQuestionCount }} 题</span>
           </template>
           <button type="button" class="theme-toggle" @click="toggleTheme">
             <el-icon><component :is="isDark ? Sunny : Moon" /></el-icon>
@@ -124,7 +162,9 @@
           </article>
 
           <article v-for="message in messages" :key="message.id" class="message" :class="message.role">
-            <span v-if="message.role === 'ai'" class="bot-icon"><el-icon><Service /></el-icon></span>
+            <span v-if="message.role === 'ai'" class="bot-icon">
+              <img src="/images/shuzhimianpin_logo.png" alt="AI 面试官" />
+            </span>
             <div :class="message.role === 'ai' ? 'bubble' : 'user-bubble'">
               <strong v-if="message.role === 'ai'">{{ message.title }}</strong>
               <p>{{ message.content }}</p>
@@ -133,7 +173,9 @@
           </article>
 
           <article v-if="waitingAI" class="message ai">
-            <span class="bot-icon"><el-icon><Service /></el-icon></span>
+            <span class="bot-icon">
+              <img src="/images/shuzhimianpin_logo.png" alt="AI 面试官" />
+            </span>
             <div class="typing"><i></i><i></i><i></i><span>AI 面试官正在判断回答...</span></div>
           </article>
 
@@ -306,6 +348,17 @@
                 </span>
               </div>
 
+              <div v-if="review.dimensionScores" class="review-job-dimension-row">
+                <strong>岗位维度评分</strong>
+                <span
+                  v-for="item in getReviewCompetencyItems(review.dimensionScores)"
+                  :key="`${review.questionId}-${item.code}`"
+                  :class="{ weak: item.score < 65, strong: item.score >= 80 }"
+                >
+                  {{ item.name }} {{ Math.round(item.score) }} · 权重 {{ Math.round(item.weight) }}%
+                </span>
+              </div>
+
               <div class="review-columns">
                 <section>
                   <h5>回答做得好</h5>
@@ -364,7 +417,10 @@
               </div>
               <div class="call-chat-panel" ref="callMessagesRef">
                 <article v-for="message in messages" :key="`call-${message.id}`" class="call-chat-item" :class="message.role">
-                  <span class="call-chat-role">{{ message.role === 'ai' ? 'AI' : '我' }}</span>
+                  <span class="call-chat-role" :class="{ ai: message.role === 'ai' }">
+                    <img v-if="message.role === 'ai'" src="/images/shuzhimianpin_logo.png" alt="AI 面试官" />
+                    <template v-else>我</template>
+                  </span>
                   <div class="call-chat-bubble">
                     <strong v-if="message.role === 'ai'">{{ message.title }}</strong>
                     <p>{{ message.content }}</p>
@@ -372,7 +428,9 @@
                 </article>
 
                 <article v-if="waitingAI" class="call-chat-item ai waiting">
-                  <span class="call-chat-role">AI</span>
+                  <span class="call-chat-role ai">
+                    <img src="/images/shuzhimianpin_logo.png" alt="AI 面试官" />
+                  </span>
                   <div class="typing"><i></i><i></i><i></i><span>AI 面试官正在判断回答...</span></div>
                 </article>
 
@@ -494,6 +552,25 @@ interface CompetencyItem {
   score?: number
 }
 
+interface ResumeProject {
+  name: string
+  time: string
+  role: string
+  techStack: string[]
+  description: string
+  responsibilities: string[]
+  achievements: string[]
+  items: string[]
+}
+
+interface ResumeSection {
+  key: string
+  title: string
+  patterns: string[]
+  items: string[]
+  projects?: ResumeProject[]
+}
+
 const DIMENSION_DEFINITIONS: Array<Omit<DimensionItem, 'score'>> = [
   { key: 'technicalDepth', label: '技术深度', description: '核心原理、关键机制、边界条件' },
   { key: 'projectRelevance', label: '项目匹配', description: '项目经历、技术栈和岗位场景结合度' },
@@ -572,7 +649,17 @@ const voiceStatusText = computed(() => {
   return recognitionSupported.value ? '进入视频后会自动识别语音' : '当前浏览器仅支持录音后转写'
 })
 const currentTechLabel = computed(() => session.value?.techStacks?.slice(0, 2).join(' / ') || session.value?.targetPosition || 'AI 面试')
-const currentOrder = computed(() => currentQuestion.value?.questionOrder || Math.min((session.value?.answeredCount || 0) + 1, session.value?.questionCount || 0))
+const effectiveQuestionCount = computed(() => {
+  const total = session.value?.questionCount || 0
+  const answered = session.value?.answeredCount || 0
+  const currentQuestionOrder = currentQuestion.value?.questionOrder || 0
+  return Math.max(total, answered + (currentQuestion.value ? 1 : 0), currentQuestionOrder)
+})
+const currentOrder = computed(() => {
+  if (!session.value) return 0
+  if (finished.value) return effectiveQuestionCount.value
+  return Math.min((session.value.answeredCount || 0) + (currentQuestion.value ? 1 : 0), effectiveQuestionCount.value)
+})
 const avatarStatusText = computed(() => {
   if (avatarLoading.value) return '数字人连接中'
   if (avatarError.value) return avatarError.value
@@ -584,6 +671,7 @@ const sessionResume = computed(() => {
   if (!fileName) return null
   return resumes.value.find((resume) => resume.originalFileName === fileName || resume.fileName === fileName) || null
 })
+const parsedResumeSections = computed(() => parseResumeSections(sessionResume.value?.content || ''))
 const elapsedLabel = computed(() => {
   const minutes = Math.floor(elapsedSeconds.value / 60)
   const seconds = elapsedSeconds.value % 60
@@ -601,6 +689,30 @@ const voiceDisplayText = computed(() => {
 })
 
 const GROWTH_CURVE_STORAGE_KEY = 'growth_curve_interview_ids'
+const INTERVIEW_TIMER_PREFIX = 'ai_interview_started_at_'
+const getTimerStorageKey = () => `${INTERVIEW_TIMER_PREFIX}${interviewId.value}`
+const parseTime = (value?: string) => {
+  if (!value) return 0
+  const time = new Date(value).getTime()
+  return Number.isFinite(time) ? time : 0
+}
+const syncInterviewTimer = (data: AIInterviewSession) => {
+  const key = getTimerStorageKey()
+  if (data.status === 'COMPLETED') {
+    const baseTime = parseTime(data.startedAt || data.createdAt) || Number(localStorage.getItem(key)) || Date.now()
+    const endTime = parseTime(data.endedAt) || Date.now()
+    startedAt = baseTime
+    elapsedSeconds.value = Math.max(0, Math.floor((endTime - baseTime) / 1000))
+    localStorage.removeItem(key)
+    return
+  }
+
+  const storedStart = Number(localStorage.getItem(key))
+  const serverStart = parseTime(data.startedAt || data.createdAt)
+  startedAt = Number.isFinite(storedStart) && storedStart > 0 ? storedStart : (serverStart || Date.now())
+  localStorage.setItem(key, String(startedAt))
+  elapsedSeconds.value = Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
+}
 const dimensionItems = computed(() => getReviewDimensionItems(summary.value?.dimensionScores))
 const competencyItems = computed<CompetencyItem[]>(() => {
   const model = summary.value?.competencyModel || []
@@ -645,6 +757,7 @@ const refreshGrowthCurveJoined = () => {
 }
 
 const openGrowthJoinDialog = () => {
+  refreshGrowthCurveJoined()
   if (growthCurveJoined.value) return
   if (growthDontRemind.value || localStorage.getItem('growthCurveJoinNoRemind') === 'true') {
     confirmJoinGrowthCurve()
@@ -707,6 +820,301 @@ const getReviewDimensionItems = (scores?: Record<string, number>): DimensionItem
   }))
 }
 
+const COMPETENCY_SOURCE_MAP: Record<string, Partial<Record<string, number>>> = {
+  basicKnowledge: { technicalDepth: 0.72, problemSolving: 0.28 },
+  projectExperience: { projectRelevance: 0.78, jobMatch: 0.22 },
+  systemDesign: { technicalDepth: 0.35, problemSolving: 0.4, jobMatch: 0.25 },
+  codingAbility: { problemSolving: 0.55, technicalDepth: 0.3, communicationClarity: 0.15 },
+  frontendBasics: { technicalDepth: 0.7, problemSolving: 0.3 },
+  frameworkAbility: { technicalDepth: 0.55, projectRelevance: 0.45 },
+  engineering: { projectRelevance: 0.55, problemSolving: 0.45 },
+  interaction: { communicationClarity: 0.45, projectRelevance: 0.35, jobMatch: 0.2 },
+  performance: { technicalDepth: 0.45, problemSolving: 0.55 },
+  mathBasics: { technicalDepth: 0.65, problemSolving: 0.35 },
+  algorithmCoding: { problemSolving: 0.62, technicalDepth: 0.38 },
+  modelUnderstanding: { technicalDepth: 0.58, communicationClarity: 0.22, jobMatch: 0.2 },
+  engineeringLanding: { projectRelevance: 0.58, jobMatch: 0.24, problemSolving: 0.18 },
+  modelBasics: { technicalDepth: 0.62, communicationClarity: 0.18, problemSolving: 0.2 },
+  ragAgent: { technicalDepth: 0.42, problemSolving: 0.4, projectRelevance: 0.18 },
+  promptEngineering: { problemSolving: 0.45, communicationClarity: 0.35, jobMatch: 0.2 },
+  businessLanding: { projectRelevance: 0.5, jobMatch: 0.35, communicationClarity: 0.15 }
+}
+
+const addSourceWeight = (source: Partial<Record<string, number>>, key: string, weight: number) => {
+  source[key] = Number(source[key] || 0) + weight
+}
+
+const getCompetencySourceMap = (item: CompetencyItem): Partial<Record<string, number>> | undefined => {
+  if (COMPETENCY_SOURCE_MAP[item.code]) {
+    return COMPETENCY_SOURCE_MAP[item.code]
+  }
+  if (AIInterviewDimensionWeights[item.code] !== undefined) {
+    return { [item.code]: 1 }
+  }
+  const text = `${item.code} ${item.name} ${item.description || ''}`.toLowerCase()
+  const source: Partial<Record<string, number>> = {}
+  if (/basic|基础|原理|知识/.test(text)) {
+    addSourceWeight(source, 'technicalDepth', 0.7)
+    addSourceWeight(source, 'problemSolving', 0.3)
+  }
+  if (/project|项目|业务|落地|复盘/.test(text)) {
+    addSourceWeight(source, 'projectRelevance', 0.6)
+    addSourceWeight(source, 'jobMatch', 0.25)
+    addSourceWeight(source, 'problemSolving', 0.15)
+  }
+  if (/design|设计|排查|优化|治理|定位|问题|方案/.test(text)) {
+    addSourceWeight(source, 'problemSolving', 0.52)
+    addSourceWeight(source, 'technicalDepth', 0.3)
+    addSourceWeight(source, 'jobMatch', 0.18)
+  }
+  if (/表达|沟通|协同|产品/.test(text)) {
+    addSourceWeight(source, 'communicationClarity', 0.58)
+    addSourceWeight(source, 'projectRelevance', 0.24)
+    addSourceWeight(source, 'jobMatch', 0.18)
+  }
+  if (/岗位|场景|匹配/.test(text)) {
+    addSourceWeight(source, 'jobMatch', 0.55)
+    addSourceWeight(source, 'projectRelevance', 0.3)
+    addSourceWeight(source, 'communicationClarity', 0.15)
+  }
+  return Object.keys(source).length ? source : undefined
+}
+
+const getReviewCompetencyItems = (scores?: Record<string, number>) => {
+  return competencyItems.value.map((item) => {
+    const sourceMap = getCompetencySourceMap(item)
+    const weightedScore = sourceMap
+      ? Object.entries(sourceMap).reduce((sum, [key, weight]) => sum + normalizeDimensionScore(scores, key) * Number(weight || 0), 0)
+      : Number(item.score || 0)
+    return {
+      ...item,
+      score: normalizeScore(weightedScore || item.score || summary.value?.overallScore || 0)
+    }
+  })
+}
+
+const TIME_RANGE_PATTERN = /((?:19|20)\d{2}(?:[./年-]\s?\d{1,2})?(?:\s*(?:-|至|到|~|—|–)\s*(?:(?:19|20)\d{2}(?:[./年-]\s?\d{1,2})?|至今|现在|present|Present))?)/
+const PROJECT_NAME_PATTERN = /^(?:项目(?:名称|名)?|项目\d+|项目[一二三四五六七八九十]+)\s*[:：、-]?\s*/i
+const PROJECT_START_PATTERN = /^(?:项目\d+|项目[一二三四五六七八九十]+|项目(?:名称|名)?|Project\s*\d*)\s*[:：、-]?/i
+const TECH_KEYWORD_PATTERN = /\b(Vue|React|Angular|Node|Java|Spring|SpringBoot|MyBatis|Python|Django|Flask|FastAPI|Go|Gin|Mysql|MySQL|Redis|MongoDB|Elasticsearch|Docker|Kubernetes|K8s|Linux|Nginx|RabbitMQ|Kafka|TypeScript|JavaScript|HTML|CSS|Uniapp|Uni-app|微信小程序|RAG|LangChain|LLM|Prompt|Cursor|Claude|Codex)\b/i
+
+const splitTechStack = (value: string) => value
+  .replace(/[；;，,、|｜]/g, '/')
+  .split('/')
+  .map((item) => item.trim())
+  .filter(Boolean)
+
+const cleanResumeLine = (line: string) => line
+  .replace(/^[-*•·●◆■\d.、\s]+/, '')
+  .replace(/\s+/g, ' ')
+  .trim()
+
+const removeInlineField = (line: string, labels: string[]) => {
+  const pattern = labels.join('|')
+  return line.replace(new RegExp(`(?:^|[；;|｜\\s])(?:${pattern})\\s*[:：]\\s*`, 'i'), ' ').trim()
+}
+
+const extractInlineField = (line: string, labels: string[]) => {
+  const labelPattern = labels.join('|')
+  const stopLabels = [
+    '项目名称', '项目名', '项目时间', '起止时间', '时间', '周期', '角色', '项目角色', '担任角色',
+    '职位', '岗位', '技术栈', '技术架构', '开发环境', '使用技术', '相关技术', '项目描述',
+    '项目简介', '项目背景', '背景', '负责内容', '项目职责', '职责', '工作内容', '项目成果', '成果', '亮点'
+  ].filter((label) => !labels.includes(label)).join('|')
+  const match = line.match(new RegExp(`(?:^|[；;|｜\\s])(?:${labelPattern})\\s*[:：]\\s*(.+)$`, 'i'))
+  if (!match?.[1]) return ''
+  return match[1].replace(new RegExp(`\\s*(?:${stopLabels})\\s*[:：].*$`, 'i'), '').trim()
+}
+
+const isProjectHeading = (line: string) => {
+  if (PROJECT_START_PATTERN.test(line)) return true
+  if (TIME_RANGE_PATTERN.test(line) && line.length <= 56 && !/[。；;]/.test(line)) return true
+  return !/[。；;]/.test(line) && line.length <= 34 && /(系统|平台|项目|网站|小程序|APP|应用|管理|商城|服务|工具|引擎|系统设计)$/i.test(line)
+}
+
+const looksLikeProjectStart = (line: string, index: number) => {
+  if (PROJECT_START_PATTERN.test(line)) return true
+  if (index === 0) return true
+  return isProjectHeading(line)
+}
+
+const pushUnique = (target: string[], value: string) => {
+  const cleaned = value.replace(/^[:：]/, '').trim()
+  if (cleaned && !target.includes(cleaned)) target.push(cleaned)
+}
+
+const parseProjectEntry = (lines: string[]): ResumeProject => {
+  const project: ResumeProject = {
+    name: '',
+    time: '',
+    role: '',
+    techStack: [],
+    description: '',
+    responsibilities: [],
+    achievements: [],
+    items: []
+  }
+
+  lines.forEach((rawLine, index) => {
+    const line = cleanResumeLine(rawLine)
+    if (!line) return
+
+    const timeMatch = line.match(TIME_RANGE_PATTERN)
+    if (timeMatch && !project.time) {
+      project.time = timeMatch[1].replace(/\s+/g, '')
+    }
+
+    const inlineName = extractInlineField(line, ['项目名称', '项目名'])
+    if (inlineName && !project.name) {
+      project.name = inlineName
+        .replace(TIME_RANGE_PATTERN, '')
+        .replace(/[|｜].*$/, '')
+        .trim()
+    }
+
+    if (PROJECT_NAME_PATTERN.test(line) && !project.name) {
+      project.name = line
+        .replace(PROJECT_NAME_PATTERN, '')
+        .replace(TIME_RANGE_PATTERN, '')
+        .replace(/[|｜].*$/, '')
+        .trim()
+    }
+
+    const inlineTime = extractInlineField(line, ['时间', '项目时间', '周期', '起止时间'])
+    if (inlineTime) {
+      project.time = inlineTime.replace(/\s+/g, '')
+    }
+
+    const inlineRole = extractInlineField(line, ['角色', '项目角色', '担任角色', '职位', '岗位'])
+    if (inlineRole && !project.role) {
+      project.role = inlineRole
+    }
+
+    const inlineTech = extractInlineField(line, ['技术栈', '技术架构', '开发环境', '使用技术', '相关技术'])
+    if (inlineTech) {
+      project.techStack.push(...splitTechStack(inlineTech))
+    }
+
+    const inlineDesc = extractInlineField(line, ['项目描述', '项目简介', '项目背景', '背景'])
+    if (inlineDesc && !project.description) {
+      project.description = inlineDesc
+    }
+
+    const hasMetaField = Boolean(inlineName || inlineTime || inlineRole || inlineTech || inlineDesc)
+    const inlineResponsibility = extractInlineField(line, ['负责内容', '项目职责', '职责', '工作内容'])
+    if (inlineResponsibility) {
+      pushUnique(project.responsibilities, inlineResponsibility)
+      return
+    }
+
+    const inlineAchievement = extractInlineField(line, ['项目成果', '成果', '亮点'])
+    if (inlineAchievement) {
+      pushUnique(project.achievements, inlineAchievement)
+      return
+    }
+
+    if (!project.name && (index === 0 || isProjectHeading(line))) {
+      project.name = line
+        .replace(TIME_RANGE_PATTERN, '')
+        .replace(PROJECT_NAME_PATTERN, '')
+        .replace(/[|｜].*$/, '')
+        .trim()
+      return
+    }
+    if (hasMetaField) return
+
+    const cleaned = removeInlineField(line, [
+      '项目名称', '项目名', '项目时间', '起止时间', '时间', '周期', '角色', '项目角色', '担任角色',
+      '职位', '岗位', '技术栈', '技术架构', '开发环境', '使用技术', '相关技术', '项目描述',
+      '项目简介', '项目背景', '背景'
+    ])
+    if (!cleaned || cleaned === project.name || cleaned === project.time) return
+    if (TECH_KEYWORD_PATTERN.test(cleaned) && cleaned.length <= 90 && project.techStack.length < 8) {
+      project.techStack.push(...splitTechStack(cleaned))
+      return
+    }
+    if (/成果|优化|提升|降低|完成|实现|上线|获奖|通过|排名|效率|性能|准确率|覆盖率/.test(cleaned)) {
+      pushUnique(project.achievements, cleaned)
+      return
+    }
+    if (/负责|参与|设计|开发|搭建|封装|对接|实现|维护|测试|部署|编写/.test(cleaned)) {
+      pushUnique(project.responsibilities, cleaned)
+      return
+    }
+    pushUnique(project.items, cleaned)
+  })
+
+  project.techStack = Array.from(new Set(project.techStack))
+  if (!project.description && project.items.length && /^(本项目|该项目|项目|基于).{8,}$/.test(project.items[0])) {
+    project.description = project.items.shift() || ''
+  }
+  if (!project.name) {
+    project.name = project.description ? project.description.slice(0, 18) : '项目经历'
+  }
+  return project
+}
+
+const parseProjects = (items: string[]) => {
+  const groups: string[][] = []
+  let current: string[] = []
+
+  items.forEach((item, index) => {
+    const line = cleanResumeLine(item)
+    if (looksLikeProjectStart(line, index) && current.length) {
+      groups.push(current)
+      current = [line]
+      return
+    }
+    current.push(line)
+  })
+  if (current.length) groups.push(current)
+
+  return groups
+    .map(parseProjectEntry)
+    .filter((project) => project.name || project.items.length || project.description || project.responsibilities.length || project.achievements.length)
+}
+
+const parseResumeSections = (content: string): ResumeSection[] => {
+  const normalized = content
+    .replace(/\r/g, '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const sectionMatchers = [
+    { key: 'basic', title: '基本信息', patterns: ['基本信息', '个人信息'] },
+    { key: 'education', title: '教育经历', patterns: ['教育经历', '教育背景', '学历'] },
+    { key: 'project', title: '项目经历', patterns: ['项目经历', '项目经验', '项目实践', '项目介绍'] },
+    { key: 'work', title: '实习/工作经历', patterns: ['工作经历', '实习经历', '实践经历'] },
+    { key: 'skills', title: '专业技能', patterns: ['专业技能', '技能清单', '技能特长', '技术栈'] },
+    { key: 'awards', title: '证书/荣誉', patterns: ['证书', '荣誉', '奖项', '获奖'] },
+    { key: 'self', title: '自我评价', patterns: ['自我评价', '个人评价', '个人优势'] }
+  ]
+  const buckets = new Map(sectionMatchers.map((item) => [item.key, { ...item, items: [] as string[] } as ResumeSection]))
+  let currentKey = 'basic'
+
+  const detectKey = (line: string) => {
+    const compact = line.replace(/[:：\s]/g, '')
+    return sectionMatchers.find((section) => section.patterns.some((pattern) => compact === pattern || compact.startsWith(pattern)))?.key
+  }
+
+  for (const line of normalized) {
+    const nextKey = detectKey(line)
+    if (nextKey && line.length <= 18) {
+      currentKey = nextKey
+      continue
+    }
+    const key = detectKey(line) || currentKey
+    const cleaned = cleanResumeLine(line)
+    if (cleaned) {
+      buckets.get(key)?.items.push(cleaned)
+    }
+  }
+
+  return [...buckets.values()]
+    .map((section) => section.key === 'project' ? { ...section, projects: parseProjects(section.items) } : section)
+    .filter((section) => section.items.length || section.projects?.length)
+}
+
 const renderRadarChart = async () => {
   await nextTick()
   if (!radarChartRef.value || !summary.value) return
@@ -718,6 +1126,9 @@ const renderRadarChart = async () => {
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'item',
+      appendToBody: true,
+      confine: false,
+      extraCssText: 'z-index: 9999; max-width: 360px; white-space: normal;',
       formatter: () => items.map((item) => `${item.label}: ${Math.round(item.score)}`).join('<br/>')
     },
     radar: {
@@ -760,6 +1171,9 @@ const renderScoringModelChart = async () => {
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'item',
+      appendToBody: true,
+      confine: false,
+      extraCssText: 'z-index: 9999; max-width: 420px; white-space: normal;',
       formatter: () => items.map((item) => {
         const description = item.description ? `<br/><span style="opacity:.72">${item.description}</span>` : ''
         return `${item.name}: ${Math.round(item.weight)}%${description}`
@@ -943,7 +1357,7 @@ const loadInterview = async () => {
     }
     session.value = data
     currentQuestion.value = data.currentQuestion || null
-    startedAt = Date.now()
+    syncInterviewTimer(data)
     messages.value = []
     pendingAvatarTexts.value = []
     initAvatarSession()
@@ -1001,13 +1415,16 @@ const submitAnswer = async () => {
     if (result.interviewerReply) {
       pushMessage('ai', result.interviewerReply)
     }
-    session.value.answeredCount += 1
+    session.value.questionCount = Math.max(result.questionCount || session.value.questionCount || 0, session.value.questionCount || 0)
+    session.value.answeredCount = result.answeredCount ?? (session.value.answeredCount + 1)
     if (result.interviewCompleted || result.nextAction === 'END') {
-      session.value.status = 'COMPLETED'
       currentQuestion.value = null
-      await closeAvatarSession()
-      activeMainTab.value = 'report'
-      await openSummary()
+      const shouldFinish = await confirmCompletePlannedInterview()
+      if (shouldFinish) {
+        await finishInterviewAndOpenReport()
+      } else {
+        pushMessage('ai', '本场规划题目已经全部完成，你可以点击左侧“结束面试”生成报告。', '完成提醒')
+      }
       return
     }
     currentQuestion.value = result.nextQuestion || await aiInterviewApi.getNextQuestion(session.value.interviewId)
@@ -1015,6 +1432,36 @@ const submitAnswer = async () => {
     ElMessage.error(error?.message || '提交回答失败，请稍后重试')
   } finally {
     waitingAI.value = false
+  }
+}
+
+const confirmCompletePlannedInterview = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `本场规划的 ${session.value?.questionCount || 0} 道题已经完成，是否现在结束面试并生成报告？`,
+      '完成本轮面试',
+      { confirmButtonText: '结束面试', cancelButtonText: '暂不结束', type: 'success' }
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+const finishInterviewAndOpenReport = async () => {
+  if (!session.value) return
+  ending.value = true
+  activeMainTab.value = 'report'
+  summaryLoading.value = true
+  try {
+    summary.value = await aiInterviewApi.endInterview(session.value.interviewId)
+    session.value.status = 'COMPLETED'
+    currentQuestion.value = null
+    localStorage.removeItem(getTimerStorageKey())
+    await closeAvatarSession()
+  } finally {
+    ending.value = false
+    summaryLoading.value = false
   }
 }
 
@@ -1027,18 +1474,9 @@ const confirmEndInterview = async () => {
       '结束面试确认',
       { confirmButtonText: '结束面试', cancelButtonText: '继续作答', type: remaining > 0 ? 'warning' : 'success' }
     )
-    ending.value = true
-    activeMainTab.value = 'report'
-    summaryLoading.value = true
-    summary.value = await aiInterviewApi.endInterview(session.value.interviewId)
-    session.value.status = 'COMPLETED'
-    currentQuestion.value = null
-    await closeAvatarSession()
+    await finishInterviewAndOpenReport()
   } catch {
     activeMainTab.value = 'dialogue'
-  } finally {
-    ending.value = false
-    summaryLoading.value = false
   }
 }
 
@@ -1322,6 +1760,7 @@ onMounted(() => {
 })
 
 onBeforeRouteLeave(async () => {
+  refreshGrowthCurveJoined()
   if (finished.value && summary.value && !growthCurveJoined.value && localStorage.getItem('growthCurveJoinNoRemind') !== 'true') {
     try {
       await ElMessageBox.confirm(
@@ -1603,20 +2042,17 @@ onUnmounted(() => {
 }
 
 .resume-summary,
-.resume-content,
 .resume-state {
   border: 1px solid var(--card-border);
   border-radius: 10px;
   background: var(--card-bg);
 }
 
-.resume-summary,
-.resume-content {
+.resume-summary {
   padding: 14px;
 }
 
-.resume-summary strong,
-.resume-content strong {
+.resume-summary strong {
   color: var(--primary-text);
   font-size: 13px;
   font-weight: 900;
@@ -1629,19 +2065,114 @@ onUnmounted(() => {
   line-height: 1.8;
 }
 
-.resume-content {
-  min-height: 0;
-  flex: 1;
+.resume-section-list {
+  display: grid;
+  gap: 10px;
 }
 
-.resume-content pre {
-  margin: 10px 0 0;
+.resume-section-card {
+  padding: 13px 14px;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: var(--card-bg);
+}
+
+.resume-section-card strong {
+  color: var(--primary-text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.resume-section-card p,
+.resume-section-card li {
   color: var(--muted-text);
-  font-family: inherit;
   font-size: 12px;
   line-height: 1.8;
-  white-space: pre-wrap;
-  word-break: break-word;
+}
+
+.resume-section-card p {
+  margin: 8px 0 0;
+}
+
+.resume-section-card ul {
+  margin: 8px 0 0;
+  padding-left: 17px;
+}
+
+.resume-project-list {
+  margin-top: 10px;
+  display: grid;
+  gap: 12px;
+}
+
+.resume-project-card {
+  padding: 12px;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--card-bg) 74%, var(--panel-bg) 26%);
+}
+
+.resume-project-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.resume-project-head h2 {
+  margin: 0;
+  color: var(--primary-text);
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 900;
+}
+
+.resume-project-head span {
+  flex: none;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.resume-project-meta {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.resume-project-meta span {
+  padding: 4px 7px;
+  border: 1px solid var(--card-border);
+  border-radius: 7px;
+  color: var(--muted-text);
+  background: var(--panel-bg);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.resume-project-desc {
+  margin: 10px 0 0;
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.resume-project-block {
+  margin-top: 10px;
+}
+
+.resume-project-block b {
+  color: var(--primary-text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.resume-project-card ul {
+  margin-top: 6px;
 }
 
 .resume-state {
@@ -2059,8 +2590,15 @@ onUnmounted(() => {
 }
 
 .bot-icon {
-  color: var(--accent);
-  background: var(--bot-icon-bg);
+  overflow: hidden;
+  background: transparent;
+  box-shadow: 0 8px 18px rgba(255, 90, 42, 0.16);
+}
+
+.bot-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .user-avatar {
@@ -2445,12 +2983,30 @@ onUnmounted(() => {
 }
 
 .call-chat-role {
+  min-width: 28px;
+  min-height: 28px;
   padding: 4px 9px;
+  display: inline-grid;
+  place-items: center;
   border-radius: 999px;
   color: var(--muted-text);
   background: var(--card-bg);
   font-size: 11px;
   font-weight: 900;
+}
+
+.call-chat-role.ai {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+.call-chat-role.ai img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .call-chat-bubble {
@@ -2977,7 +3533,8 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-.review-dimension-row span {
+.review-dimension-row span,
+.review-job-dimension-row span {
   min-height: 28px;
   padding: 0 10px;
   display: inline-flex;
@@ -2990,14 +3547,34 @@ onUnmounted(() => {
   font-weight: 900;
 }
 
-.review-dimension-row span.strong {
+.review-dimension-row span.strong,
+.review-job-dimension-row span.strong {
   color: #168052;
   background: rgba(36, 168, 101, 0.1);
 }
 
-.review-dimension-row span.weak {
+.review-dimension-row span.weak,
+.review-job-dimension-row span.weak {
   color: #d3462f;
   background: rgba(211, 70, 47, 0.1);
+}
+
+.review-job-dimension-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--report-card-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--report-muted-bg) 78%, var(--panel-bg) 22%);
+}
+
+.review-job-dimension-row > strong {
+  margin-right: 4px;
+  color: var(--primary-text);
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .review-columns {

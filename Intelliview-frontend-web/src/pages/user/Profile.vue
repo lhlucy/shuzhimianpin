@@ -2,7 +2,7 @@
   <div class="profile-page">
     <aside class="app-sidebar">
       <router-link to="/user" class="brand">
-        <span>AI</span>
+        <span class="brand-logo"><img src="/images/shuzhimianpin_logo.png" alt="" /></span>
         <strong>数智面聘</strong>
       </router-link>
 
@@ -389,16 +389,21 @@ onMounted(async () => {
   gap: 10px;
 }
 
-.brand span {
+.brand-logo {
   width: 30px;
   height: 30px;
   display: grid;
   place-items: center;
   border-radius: 7px;
-  background: #ff5a2a;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 900;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: 0 8px 18px rgba(255, 90, 42, 0.18);
+}
+
+.brand-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand strong {

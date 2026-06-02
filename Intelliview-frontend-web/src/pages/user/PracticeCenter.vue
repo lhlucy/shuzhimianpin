@@ -3,7 +3,7 @@
     <template v-if="!isPracticing">
       <aside class="app-sidebar">
         <router-link to="/user" class="brand">
-          <span>AI</span>
+          <span class="brand-logo"><img src="/images/shuzhimianpin_logo.png" alt="" /></span>
           <strong>数智面聘</strong>
         </router-link>
 
@@ -326,11 +326,30 @@ const roleCards = computed(() =>
   })
 )
 
+const normalizeSearchText = (value?: string) => (value || '')
+  .toString()
+  .trim()
+  .toLowerCase()
+  .replace(/[\s/_-]+/g, '')
+
+const roleSearchCorpus = (role: any) => [
+  role.name,
+  role.subtitle,
+  role.category,
+  role.group,
+  role.code,
+  role.shortName,
+  role.hotQuestion,
+  role.heat,
+  ...(role.focus || []),
+  ...(role.questions || []).slice(0, 10).flatMap((question: any) => [question.title, question.category, question.difficulty])
+].map(normalizeSearchText).join('|')
+
 const filteredRoles = computed(() => {
-  const keyword = searchText.value.trim().toLowerCase()
+  const keyword = normalizeSearchText(searchText.value)
   return roleCards.value.filter((role) => {
     const matchCategory = activeCategory.value === '全部' || role.group === activeCategory.value
-    const matchKeyword = !keyword || `${role.name}${role.subtitle}${role.category}`.toLowerCase().includes(keyword)
+    const matchKeyword = !keyword || roleSearchCorpus(role).includes(keyword)
     return matchCategory && matchKeyword
   })
 })
@@ -360,10 +379,16 @@ const currentMeta = computed(() => ({
 }))
 const questions = computed(() => currentRole.value?.questions || [])
 const filteredQuestions = computed(() => {
-  const keyword = questionSearch.value.trim().toLowerCase()
+  const keyword = normalizeSearchText(questionSearch.value)
   return questions.value.filter((question) => {
     const matchTab = questionTab.value === 'all' || !question.done
-    const matchKeyword = !keyword || question.title.toLowerCase().includes(keyword)
+    const matchKeyword = !keyword || [
+      question.title,
+      question.category,
+      question.difficulty,
+      question.detail,
+      ...(question.points || [])
+    ].map(normalizeSearchText).join('|').includes(keyword)
     return matchTab && matchKeyword
   })
 })
@@ -449,9 +474,11 @@ const goNext = () => {
 }
 
 watch(
-  () => route.query.role,
+  () => [route.query.role, route.query.question],
   () => {
-    const firstQuestion = currentRole.value.questions[0]
+    const queryQuestionId = Number(route.query.question)
+    const targetQuestion = currentRole.value.questions.find((item) => item.id === queryQuestionId)
+    const firstQuestion = targetQuestion || currentRole.value.questions[0]
     activeQuestionId.value = firstQuestion?.id || null
     questionSearch.value = ''
     questionTab.value = 'all'
@@ -466,6 +493,16 @@ watch(
     if (id) loadQuestionDetail(id)
   },
   { immediate: true }
+)
+
+watch(
+  () => questions.value.map((item) => item.id).join(','),
+  () => {
+    if (activeQuestionId.value || !questions.value.length) return
+    const queryQuestionId = Number(route.query.question)
+    const targetQuestion = questions.value.find((item) => item.id === queryQuestionId)
+    activeQuestionId.value = (targetQuestion || questions.value[0])?.id || null
+  }
 )
 
 const loadUserPracticeData = async () => {
@@ -602,16 +639,21 @@ onMounted(async () => {
   gap: 10px;
 }
 
-.brand span {
+.brand-logo {
   width: 30px;
   height: 30px;
   display: grid;
   place-items: center;
   border-radius: 7px;
-  background: #ff5a2a;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 900;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: 0 8px 18px rgba(255, 90, 42, 0.18);
+}
+
+.brand-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand strong {

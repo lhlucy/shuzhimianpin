@@ -114,7 +114,7 @@ app:
     aliyun:
       enabled: true
       base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      model: qwen3.6-plus
+      model: qwen3.6-flash
       # 请通过环境变量 DASHSCOPE_API_KEY 注入真实密钥，避免明文写入仓库。
       api-key: ${DASHSCOPE_API_KEY:}
       connect-timeout-ms: 10000
@@ -170,13 +170,13 @@ app:
 email:
   enabled: true
   from: ${MAIL_FROM:${MAIL_USERNAME:}}  # 这里要和上面的username一致！
-  from-name: 面试鸭
+  from-name: 数智面聘
   mock: false
 
   # 邮件主题
-  login-subject: "面试鸭 - 登录验证码"
-  register-subject: "面试鸭 - 注册验证码"
-  reset-password-subject: "面试鸭 - 重置密码验证码"
+  login-subject: "数智面聘 - 登录验证码"
+  register-subject: "数智面聘 - 注册验证码"
+  reset-password-subject: "数智面聘 - 重置密码验证码"
 
   # 邮件模板 - 修正了缩进！
   code-template: |
@@ -214,7 +214,7 @@ email:
     <body>
         <div class="container">
             <div class="header">
-                <h1>面试鸭</h1>
+                <h1>数智面聘</h1>
             </div>
             <div class="content">
                 <h2>亲爱的用户：</h2>
@@ -224,8 +224,8 @@ email:
                 <p>如非本人操作，请忽略此邮件。</p>
             </div>
             <div class="footer">
-                <p>面试鸭刷题平台</p>
-                <p>© 2024 面试鸭 版权所有</p>
+                <p>数智面聘智能面试训练平台</p>
+                <p>© 2024 数智面聘 版权所有</p>
             </div>
         </div>
     </body>

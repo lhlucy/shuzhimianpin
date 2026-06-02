@@ -16,10 +16,10 @@ public class EmailConfig {
     private String sendgridApiKey;
 
     // 邮件主题
-    private String loginSubject = "领书 - 登录验证码";
-    private String registerSubject = "领书 - 注册验证码";
-    private String resetPasswordSubject = "领书 - 重置密码验证码";
-    private String deleteAccountSubject = "领书 - 删除账号验证码";
+    private String loginSubject = "数智面聘 - 登录验证码";
+    private String registerSubject = "数智面聘 - 注册验证码";
+    private String resetPasswordSubject = "数智面聘 - 重置密码验证码";
+    private String deleteAccountSubject = "数智面聘 - 删除账号验证码";
 
     private String codeTemplate = "<!DOCTYPE html>" +
         "<html>" +
@@ -55,7 +55,7 @@ public class EmailConfig {
         "<body>" +
         "    <div class=\"container\">" +
         "        <div class=\"header\">" +
-        "            <h1>领书</h1>" +
+        "            <h1>数智面聘</h1>" +
         "        </div>" +
         "        <div class=\"content\">" +
         "            <h2>验证码</h2>" +
@@ -66,7 +66,7 @@ public class EmailConfig {
         "        </div>" +
         "        <div class=\"footer\">" +
         "            <p>此邮件由系统自动发送</p>" +
-        "            <p>© 2024 领书 版权所有</p>" +
+        "            <p>© 2024 数智面聘 版权所有</p>" +
         "        </div>" +
         "    </div>" +
         "</body>" +

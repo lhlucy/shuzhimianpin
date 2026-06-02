@@ -3,13 +3,21 @@
     <div ref="containerRef" class="avatar-canvas"></div>
 
     <div v-if="loading" class="avatar-overlay">
+      <span class="avatar-brand"><img src="/images/shuzhimianpin_logo.png" alt="" /></span>
       <span class="loader"></span>
       <strong>正在连接数字人...</strong>
     </div>
 
     <div v-else-if="error" class="avatar-overlay error">
+      <span class="avatar-brand"><img src="/images/shuzhimianpin_logo.png" alt="" /></span>
       <strong>数字人暂不可用</strong>
       <p>{{ error }}</p>
+    </div>
+
+    <div v-else-if="!session?.connected" class="avatar-overlay idle">
+      <span class="avatar-brand"><img src="/images/shuzhimianpin_logo.png" alt="AI 面试官" /></span>
+      <strong>AI 面试官</strong>
+      <p>数智面聘数字面试官正在待命</p>
     </div>
 
     <button v-else-if="resumeNeeded" type="button" class="resume-btn" @click="resumePlayback">
@@ -231,6 +239,25 @@ onBeforeUnmount(() => {
 
 .avatar-overlay.error {
   color: #7a3a2d;
+}
+
+.avatar-brand {
+  width: 86px;
+  height: 86px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  overflow: hidden;
+  background: transparent;
+  box-shadow:
+    0 18px 44px rgba(255, 90, 42, 0.24),
+    0 0 0 8px rgba(255, 106, 0, 0.08);
+}
+
+.avatar-brand img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .avatar-overlay p {

@@ -13,6 +13,9 @@ public class QuestionResponse {
     private String difficultyLabel;
     private Long categoryId;
     private String categoryName;
+    private Long primaryJobRoleId;
+    private String primaryJobRoleCode;
+    private String primaryJobRoleName;
     private List<TagResponse> tags;
     private Integer submitCount;
     private Integer acceptCount;
@@ -115,6 +118,30 @@ public class QuestionResponse {
         this.categoryName = categoryName;
     }
 
+    public Long getPrimaryJobRoleId() {
+        return primaryJobRoleId;
+    }
+
+    public void setPrimaryJobRoleId(Long primaryJobRoleId) {
+        this.primaryJobRoleId = primaryJobRoleId;
+    }
+
+    public String getPrimaryJobRoleCode() {
+        return primaryJobRoleCode;
+    }
+
+    public void setPrimaryJobRoleCode(String primaryJobRoleCode) {
+        this.primaryJobRoleCode = primaryJobRoleCode;
+    }
+
+    public String getPrimaryJobRoleName() {
+        return primaryJobRoleName;
+    }
+
+    public void setPrimaryJobRoleName(String primaryJobRoleName) {
+        this.primaryJobRoleName = primaryJobRoleName;
+    }
+
     public List<TagResponse> getTags() {
         return tags;
     }
@@ -205,6 +232,9 @@ public class QuestionResponse {
         private String difficultyLabel;
         private Long categoryId;
         private String categoryName;
+        private Long primaryJobRoleId;
+        private String primaryJobRoleCode;
+        private String primaryJobRoleName;
         private List<TagResponse> tags;
         private Integer submitCount;
         private Integer acceptCount;
@@ -253,6 +283,21 @@ public class QuestionResponse {
 
         public Builder categoryName(String categoryName) {
             this.categoryName = categoryName;
+            return this;
+        }
+
+        public Builder primaryJobRoleId(Long primaryJobRoleId) {
+            this.primaryJobRoleId = primaryJobRoleId;
+            return this;
+        }
+
+        public Builder primaryJobRoleCode(String primaryJobRoleCode) {
+            this.primaryJobRoleCode = primaryJobRoleCode;
+            return this;
+        }
+
+        public Builder primaryJobRoleName(String primaryJobRoleName) {
+            this.primaryJobRoleName = primaryJobRoleName;
             return this;
         }
 
@@ -307,7 +352,11 @@ public class QuestionResponse {
         }
 
         public QuestionResponse build() {
-            return new QuestionResponse(id, title, slug, description, difficulty, difficultyLabel, categoryId, categoryName, tags, submitCount, acceptCount, acceptRate, viewCount, likeCount, isVisible, createdAt, updatedAt, favoriteTime);
+            QuestionResponse response = new QuestionResponse(id, title, slug, description, difficulty, difficultyLabel, categoryId, categoryName, tags, submitCount, acceptCount, acceptRate, viewCount, likeCount, isVisible, createdAt, updatedAt, favoriteTime);
+            response.setPrimaryJobRoleId(primaryJobRoleId);
+            response.setPrimaryJobRoleCode(primaryJobRoleCode);
+            response.setPrimaryJobRoleName(primaryJobRoleName);
+            return response;
         }
     }
 

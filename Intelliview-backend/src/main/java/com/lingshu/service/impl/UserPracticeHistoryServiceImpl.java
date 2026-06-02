@@ -2,8 +2,10 @@ package com.lingshu.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.lingshu.entity.JobRole;
 import com.lingshu.entity.UserPracticeHistory;
 import com.lingshu.entity.Question;
+import com.lingshu.mapper.JobRoleMapper;
 import com.lingshu.mapper.UserPracticeHistoryMapper;
 import com.lingshu.mapper.QuestionMapper;
 import com.lingshu.service.UserPracticeHistoryService;
@@ -28,6 +30,7 @@ public class UserPracticeHistoryServiceImpl implements UserPracticeHistoryServic
     
     private final UserPracticeHistoryMapper userPracticeHistoryMapper;
     private final QuestionMapper questionMapper;
+    private final JobRoleMapper jobRoleMapper;
     
     /**
      * 计算题目所需的最小停留时长（秒）
@@ -95,6 +98,9 @@ public class UserPracticeHistoryServiceImpl implements UserPracticeHistoryServic
             existingRecord.setViewAnswer(request.getViewAnswer());
             // 累加学习时长
             existingRecord.setDuration(existingRecord.getDuration() + actualDuration);
+            if (existingRecord.getJobRoleId() == null && question != null) {
+                existingRecord.setJobRoleId(question.getPrimaryJobRoleId());
+            }
             existingRecord.setUpdatedAt(LocalDateTime.now());
             userPracticeHistoryMapper.updateById(existingRecord);
             return existingRecord;
@@ -106,6 +112,7 @@ public class UserPracticeHistoryServiceImpl implements UserPracticeHistoryServic
             newRecord.setCompleted(isCompleted);
             newRecord.setViewAnswer(request.getViewAnswer());
             newRecord.setDuration(actualDuration);
+            newRecord.setJobRoleId(question != null ? question.getPrimaryJobRoleId() : null);
             newRecord.setCreatedAt(LocalDateTime.now());
             newRecord.setUpdatedAt(LocalDateTime.now());
             userPracticeHistoryMapper.insert(newRecord);
@@ -188,12 +195,18 @@ public class UserPracticeHistoryServiceImpl implements UserPracticeHistoryServic
      */
     private PracticeHistoryResponse convertToResponse(UserPracticeHistory record) {
         Question question = questionMapper.selectById(record.getQuestionId());
+        Long jobRoleId = record.getJobRoleId() != null
+                ? record.getJobRoleId()
+                : (question != null ? question.getPrimaryJobRoleId() : null);
+        JobRole jobRole = jobRoleId == null ? null : jobRoleMapper.selectById(jobRoleId);
         
         return PracticeHistoryResponse.builder()
                 .id(record.getId())
                 .questionId(record.getQuestionId())
                 .questionTitle(question != null ? question.getTitle() : "")
                 .questionSlug(question != null ? question.getSlug() : "")
+                .jobRoleId(jobRoleId)
+                .jobRoleName(jobRole != null ? jobRole.getName() : null)
                 .difficulty(question != null ? question.getDifficulty().name() : "")
                 .difficultyLabel(question != null ? question.getDifficulty().getLabel() : "")
                 .completed(record.getCompleted())

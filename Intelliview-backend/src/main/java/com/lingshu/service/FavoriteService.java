@@ -5,8 +5,10 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lingshu.dto.response.QuestionResponse;
+import com.lingshu.entity.JobRole;
 import com.lingshu.entity.Question;
 import com.lingshu.entity.UserFavorite;
+import com.lingshu.mapper.JobRoleMapper;
 import com.lingshu.mapper.QuestionMapper;
 import com.lingshu.mapper.UserFavoriteMapper;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,7 @@ public class FavoriteService {
     
     private final UserFavoriteMapper favoriteMapper;
     private final QuestionMapper questionMapper;
+    private final JobRoleMapper jobRoleMapper;
 
     /**
      * 添加收藏
@@ -104,6 +107,7 @@ public class FavoriteService {
                 .collect(Collectors.toList());
 
         List<Question> questions = questionMapper.selectBatchIds(questionIds);
+        Map<Long, JobRole> roleMap = loadRoleMap(questions);
 
         // 按问题ID分组
         Map<Long, Question> questionMap = questions.stream()
@@ -117,7 +121,7 @@ public class FavoriteService {
                     if (question == null) {
                         throw new RuntimeException("问题不存在: " + favorite.getQuestionId());
                     }
-                    QuestionResponse response = convertToResponse(question);
+                    QuestionResponse response = convertToResponse(question, roleMap.get(question.getPrimaryJobRoleId()));
                     response.setFavoriteTime(favorite.getCreatedAt());
                     return response;
                 })
@@ -176,16 +180,30 @@ public class FavoriteService {
         }
 
         List<Question> questions = questionMapper.selectBatchIds(questionIds);
+        Map<Long, JobRole> roleMap = loadRoleMap(questions);
 
         return questions.stream()
-                .map(this::convertToResponse)
+                .map(question -> convertToResponse(question, roleMap.get(question.getPrimaryJobRoleId())))
                 .collect(Collectors.toList());
     }
 
     /**
      * 转换为响应对象
      */
-    private QuestionResponse convertToResponse(Question question) {
+    private Map<Long, JobRole> loadRoleMap(List<Question> questions) {
+        List<Long> roleIds = questions.stream()
+                .map(Question::getPrimaryJobRoleId)
+                .filter(id -> id != null)
+                .distinct()
+                .collect(Collectors.toList());
+        if (roleIds.isEmpty()) {
+            return Map.of();
+        }
+        return jobRoleMapper.selectBatchIds(roleIds).stream()
+                .collect(Collectors.toMap(JobRole::getId, Function.identity()));
+    }
+
+    private QuestionResponse convertToResponse(Question question, JobRole jobRole) {
         return QuestionResponse.builder()
                 .id(question.getId())
                 .title(question.getTitle())
@@ -195,6 +213,9 @@ public class FavoriteService {
                 .difficultyLabel(question.getDifficulty().getLabel())
                 .categoryId(question.getCategoryId())
                 .categoryName(null) // 后续可通过categoryId查询
+                .primaryJobRoleId(question.getPrimaryJobRoleId())
+                .primaryJobRoleCode(jobRole != null ? jobRole.getCode() : null)
+                .primaryJobRoleName(jobRole != null ? jobRole.getName() : null)
                 .tags(null) // 后续可通过questionId查询
                 .submitCount(question.getSubmitCount())
                 .acceptCount(question.getAcceptCount())

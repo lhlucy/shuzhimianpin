@@ -51,3 +51,28 @@ Intelliview-backend/logs/
 # Codex / generated migration helper metadata
 .github/java-upgrade/
 .github/modernize/
+
+# Local assistant/tool state
+.claude/
+
+# Generated presentation and image intermediates
+outputs/
+image_to_ppt_runs/
+PPT页面预览图*/
+PPT页面预览图_image2/
+决赛答辩/
+*.pptx
+*.ppt
+*.pdf
+
+# Generated project visual drafts
+项目图片/图标/
+项目图片/核心解决方案闭环需要图/
+项目图片/shuzhimianpin_logo.png
+Intelliview-frontend-web/public/images/home-hero-lines-image2.png
+Intelliview-frontend-web/public/images/shuzhimianpin_logo.png
+
+# Local SQL/question generation helpers
+add_questions.sql
+gen_sql.py
+gen_sql2.py

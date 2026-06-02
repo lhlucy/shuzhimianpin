@@ -29,6 +29,10 @@ public interface UserMapper extends BaseMapper<User> {
     // 检查邮箱是否存在
     @Select("SELECT COUNT(*) > 0 FROM users WHERE email = #{email}")
     boolean existsByEmail(@Param("email") String email);
+
+    // 检查手机号是否存在
+    @Select("SELECT COUNT(*) > 0 FROM users WHERE phone = #{phone}")
+    boolean existsByPhone(@Param("phone") String phone);
     
     // 检查GitHub ID是否存在
     @Select("SELECT COUNT(*) > 0 FROM users WHERE github_id = #{githubId}")

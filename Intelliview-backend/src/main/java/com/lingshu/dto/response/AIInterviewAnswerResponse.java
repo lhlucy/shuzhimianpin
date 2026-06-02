@@ -23,5 +23,9 @@ public class AIInterviewAnswerResponse {
 
     private boolean summaryReady;
 
+    private Integer questionCount;
+
+    private Integer answeredCount;
+
     private AIInterviewQuestionResponse nextQuestion;
 }

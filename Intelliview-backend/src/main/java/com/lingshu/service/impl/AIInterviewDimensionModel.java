@@ -100,6 +100,15 @@ final class AIInterviewDimensionModel {
         return KEYS.stream().allMatch(key -> scores.get(key) != null);
     }
 
+    static boolean hasSpread(Map<String, Double> scores) {
+        if (!isComplete(scores)) {
+            return false;
+        }
+        double min = KEYS.stream().map(scores::get).mapToDouble(Double::doubleValue).min().orElse(0.0);
+        double max = KEYS.stream().map(scores::get).mapToDouble(Double::doubleValue).max().orElse(0.0);
+        return max - min >= 0.5;
+    }
+
     static List<String> keys() {
         return KEYS;
     }

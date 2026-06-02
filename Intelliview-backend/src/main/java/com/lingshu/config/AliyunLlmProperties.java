@@ -21,9 +21,9 @@ public class AliyunLlmProperties {
     private String baseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1";
 
     /**
-     * 模型名称，例如 qwen3.6-plus。
+     * 模型名称，例如 qwen3.6-flash。
      */
-    private String model = "qwen3.6-plus";
+    private String model = "qwen3.6-flash";
 
     /**
      * 百炼 API Key，建议通过环境变量 DASHSCOPE_API_KEY 注入。

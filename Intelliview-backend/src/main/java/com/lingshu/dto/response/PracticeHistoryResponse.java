@@ -22,9 +22,13 @@ public class PracticeHistoryResponse {
     private String questionTitle;
     
     private String questionSlug;
-    
+
+    private Long jobRoleId;
+
+    private String jobRoleName;
+
     private String difficulty;
-    
+
     private String difficultyLabel;
     
     private Boolean completed;

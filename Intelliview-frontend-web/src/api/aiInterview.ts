@@ -40,6 +40,9 @@ export interface AIInterviewSession {
   voiceEnabled?: boolean
   questionCount: number
   answeredCount: number
+  createdAt?: string
+  startedAt?: string
+  endedAt?: string
   currentQuestion?: AIInterviewQuestion | null
 }
 
@@ -47,6 +50,7 @@ export interface AIInterviewHistoryItem {
   interviewId: number
   title: string
   status: string
+  jobRoleId?: number
   targetPosition: string
   interviewLanguage: string
   techStacks: string[]
@@ -84,6 +88,8 @@ export interface AIInterviewAnswerResult {
   dimensionScores?: Record<string, number>
   interviewCompleted: boolean
   summaryReady: boolean
+  questionCount?: number
+  answeredCount?: number
   nextQuestion?: AIInterviewQuestion | null
 }
 

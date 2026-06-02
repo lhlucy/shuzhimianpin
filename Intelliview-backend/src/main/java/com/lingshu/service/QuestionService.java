@@ -260,6 +260,7 @@ public class QuestionService {
         
         // 标签列表
         java.util.List<QuestionResponse.TagResponse> tags = new java.util.ArrayList<>();
+        JobRole jobRole = question.getPrimaryJobRoleId() == null ? null : jobRoleMapper.selectById(question.getPrimaryJobRoleId());
         
         return QuestionResponse.builder()
                 .id(question.getId())
@@ -270,6 +271,9 @@ public class QuestionService {
                 .difficultyLabel(question.getDifficulty().getLabel())
                 .categoryId(question.getCategoryId())
                 .categoryName(categoryName)
+                .primaryJobRoleId(question.getPrimaryJobRoleId())
+                .primaryJobRoleCode(jobRole != null ? jobRole.getCode() : null)
+                .primaryJobRoleName(jobRole != null ? jobRole.getName() : null)
                 .tags(tags)
                 .submitCount(question.getSubmitCount())
                 .acceptCount(question.getAcceptCount())

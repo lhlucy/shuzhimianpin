@@ -25,6 +25,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 @RestController
@@ -60,6 +61,7 @@ public class AuthController {
             @Valid @RequestBody
             SendCodeRequest request,
             HttpServletRequest httpRequest) {
+        request.setEmail(normalizeEmail(request.getEmail()));
 
         if (!captchaService.validateCaptcha(request.getCaptchaKey(), request.getCaptchaCode())) {
             return ResponseEntity.badRequest()
@@ -202,6 +204,9 @@ public class AuthController {
             @Valid @RequestBody
             RegisterRequest request,
             HttpServletRequest httpRequest) {
+        request.setUsername(request.getUsername().trim());
+        request.setEmail(normalizeEmail(request.getEmail()));
+        request.setPhone(request.getPhone().trim());
 
         // 验证验证码
         if (!emailService.validateCode(request.getEmail(), request.getCode(),
@@ -226,10 +231,16 @@ public class AuthController {
                     .body(ApiResponse.error("邮箱已存在"));
         }
 
+        if (userMapper.existsByPhone(request.getPhone())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("手机号已存在"));
+        }
+
         // 创建用户
         User user = new User();
         user.setUsername(request.getUsername());
         user.setEmail(request.getEmail());
+        user.setPhone(request.getPhone());
         user.setEmailVerified(true);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
 
@@ -365,6 +376,10 @@ public class AuthController {
         return "https://ui-avatars.com/api/?name=" +
                 (email != null ? email.substring(0, 1) : "U") +
                 "&background=random";
+    }
+
+    private String normalizeEmail(String email) {
+        return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
     }
     /**
      * 重置密码

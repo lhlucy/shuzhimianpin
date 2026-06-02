@@ -2,7 +2,7 @@
   <div class="auth-page">
     <section class="brand-side">
       <router-link to="/user" class="brand">
-        <span>AI</span>
+        <span class="brand-logo"><img src="/images/shuzhimianpin_logo.png" alt="" /></span>
         <strong>数智面聘</strong>
       </router-link>
 
@@ -42,6 +42,9 @@
           </el-form-item>
           <el-form-item prop="email">
             <el-input v-model="registerForm.email" placeholder="请输入邮箱" :prefix-icon="Message" />
+          </el-form-item>
+          <el-form-item prop="phone">
+            <el-input v-model="registerForm.phone" placeholder="请输入手机号" :prefix-icon="Iphone" maxlength="11" />
           </el-form-item>
           <el-form-item prop="captchaCode">
             <div class="captcha-row">
@@ -91,7 +94,7 @@
 import { onMounted, onUnmounted, ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Key, Lock, Message, Picture, User } from '@element-plus/icons-vue'
+import { Iphone, Key, Lock, Message, Picture, User } from '@element-plus/icons-vue'
 import service from '@/utils/axios'
 import { saveAuthSession } from '@/utils/auth'
 
@@ -107,6 +110,7 @@ let countdownTimer: number | undefined
 interface RegisterForm {
   username: string
   email: string
+  phone: string
   captchaKey: string
   captchaCode: string
   code: string
@@ -118,6 +122,7 @@ interface RegisterForm {
 const registerForm = reactive<RegisterForm>({
   username: '',
   email: '',
+  phone: '',
   captchaKey: '',
   captchaCode: '',
   code: '',
@@ -126,6 +131,9 @@ const registerForm = reactive<RegisterForm>({
   agreement: false
 })
 
+const EMAIL_PATTERN = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
+const PHONE_PATTERN = /^1[3-9]\d{9}$/
+
 const rules = {
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
@@ -133,7 +141,21 @@ const rules = {
   ],
   email: [
     { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
+    {
+      validator: (_rule: any, value: string, callback: (error?: Error) => void) => {
+        EMAIL_PATTERN.test(String(value || '').trim()) ? callback() : callback(new Error('请输入正确的邮箱格式'))
+      },
+      trigger: 'blur'
+    }
+  ],
+  phone: [
+    { required: true, message: '请输入手机号', trigger: 'blur' },
+    {
+      validator: (_rule: any, value: string, callback: (error?: Error) => void) => {
+        PHONE_PATTERN.test(String(value || '').trim()) ? callback() : callback(new Error('请输入正确的手机号格式'))
+      },
+      trigger: 'blur'
+    }
   ],
   captchaCode: [
     { required: true, message: '请输入图形验证码', trigger: 'blur' },
@@ -210,7 +232,7 @@ const sendEmailCode = async () => {
   sendingCode.value = true
   try {
     const response: any = await service.post('/api/auth/send-code', {
-      email: registerForm.email,
+      email: registerForm.email.trim().toLowerCase(),
       type: 'REGISTER',
       captchaKey: registerForm.captchaKey,
       captchaCode: registerForm.captchaCode
@@ -238,8 +260,9 @@ const handleRegister = async () => {
     loading.value = true
 
     const response: any = await service.post('/api/auth/register', {
-      username: registerForm.username,
-      email: registerForm.email,
+      username: registerForm.username.trim(),
+      email: registerForm.email.trim().toLowerCase(),
+      phone: registerForm.phone.trim(),
       password: registerForm.password,
       code: registerForm.code
     })
@@ -296,16 +319,21 @@ onUnmounted(() => {
   width: fit-content;
 }
 
-.brand span {
+.brand-logo {
   width: 34px;
   height: 34px;
   display: grid;
   place-items: center;
   border-radius: 8px;
-  color: #ffffff;
-  background: #ff5a2a;
-  font-size: 13px;
-  font-weight: 900;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: 0 10px 22px rgba(255, 90, 42, 0.2);
+}
+
+.brand-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand strong {

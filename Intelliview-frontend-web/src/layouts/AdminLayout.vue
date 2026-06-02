@@ -2,7 +2,7 @@
   <div class="admin-layout">
     <aside class="admin-sidebar" :class="{ collapsed }">
       <router-link to="/admin" class="brand">
-        <span class="brand-mark">管</span>
+        <span class="brand-mark"><img src="/images/shuzhimianpin_logo.png" alt="" /></span>
         <div v-if="!collapsed" class="brand-copy">
           <strong>数智面聘</strong>
           <small>Admin Console</small>
@@ -153,10 +153,15 @@ const handleLogout = () => {
   display: grid;
   place-items: center;
   border-radius: 14px;
-  background: #fdca17;
-  color: #173a74;
-  font-weight: 900;
-  font-size: 16px;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: 0 10px 24px rgba(255, 106, 0, 0.18);
+}
+
+.brand-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand-copy {

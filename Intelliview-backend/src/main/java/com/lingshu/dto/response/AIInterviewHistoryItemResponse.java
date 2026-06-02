@@ -16,6 +16,8 @@ public class AIInterviewHistoryItemResponse {
 
     private String status;
 
+    private Long jobRoleId;
+
     private String targetPosition;
 
     private String interviewLanguage;

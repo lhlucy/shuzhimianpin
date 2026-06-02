@@ -318,6 +318,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         }
 
         String interviewerReply = buildAIInterviewerReply(evaluation, nextAction, nextQuestion);
+        int answeredCount = aiInterviewAnswerMapper.selectByInterviewId(interviewId).size();
         return AIInterviewAnswerResponse.builder()
                 .answerId(answer.getId())
                 .nextAction(nextAction)
@@ -326,6 +327,8 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 .dimensionScores(evaluation.dimensionScores)
                 .interviewCompleted(completed)
                 .summaryReady(completed)
+                .questionCount(safeInt(interview.getQuestionCount()))
+                .answeredCount(answeredCount)
                 .nextQuestion(nextQuestion == null ? null : toQuestionResponse(nextQuestion, false))
                 .build();
     }
@@ -656,12 +659,18 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         AIInterviewAssessment newAssessment = new AIInterviewAssessment();
         newAssessment.setInterviewId(interview.getId());
         JobRole jobRole = resolveInterviewJobRole(interview);
-        payload.weightedOverallScore = calculateWeightedOverallScore(payload.dimensionScores, jobRole, payload.overallScore);
+        payload.dimensionScores = reconcileSummaryDimensionScores(payload.dimensionScores,
+                averageDimensionScoresFromAnswers(answers, payload.overallScore), payload.overallScore);
+        List<AIInterviewSummaryResponse.CompetencyDimension> competencyDimensions =
+                buildCompetencyDimensions(interview, payload.dimensionScores, payload.overallScore);
+        payload.weightedOverallScore = calculateCompositeOverallScore(payload.dimensionScores, competencyDimensions,
+                answers, safeInt(interview.getQuestionCount()), payload.overallScore);
         newAssessment.setOverallScore(payload.weightedOverallScore);
         newAssessment.setSectionScores(writeJsonSilently(Map.of(
                 "summary", payload.summary,
                 "dimensionScores", payload.dimensionScores,
                 "competencyModel", buildCompetencyModel(jobRole),
+                "competencyDimensions", competencyDimensions,
                 "rawOverallScore", payload.overallScore,
                 "weightedOverallScore", payload.weightedOverallScore,
                 "totalQuestions", safeInt(interview.getQuestionCount()),
@@ -710,7 +719,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 return null;
             }
             payload.overallScore = roundToOneDecimal(payload.overallScore);
-            if (!AIInterviewDimensionModel.isComplete(payload.dimensionScores)) {
+            if (!AIInterviewDimensionModel.hasSpread(payload.dimensionScores)) {
                 payload.dimensionScores = averageDimensionScoresFromAnswers(answerMap.values().stream().collect(Collectors.toList()), payload.overallScore);
             }
             return payload;
@@ -809,6 +818,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 .interviewId(interview.getId())
                 .title(interview.getTitle())
                 .status(interview.getStatus())
+                .jobRoleId(interview.getJobRoleId())
                 .targetPosition(interview.getTargetPosition())
                 .interviewLanguage(interview.getInterviewLanguage())
                 .techStacks(readJsonList(interview.getSkillTags()))
@@ -1022,14 +1032,22 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         int answeredQuestions = answers.size();
         int durationSeconds = safeInt(interview.getActualDuration());
 
-        Map<String, Double> dimensionScores = readDimensionScores(assessment.getSectionScores(), assessment.getOverallScore());
+        double assessmentScore = assessment.getOverallScore() == null ? 0.0 : assessment.getOverallScore();
+        Map<String, Double> dimensionScores = reconcileSummaryDimensionScores(
+                readDimensionScores(assessment.getSectionScores(), assessmentScore),
+                averageDimensionScoresFromAnswers(answers, assessmentScore),
+                assessmentScore);
+        List<AIInterviewSummaryResponse.CompetencyDimension> competencyDimensions =
+                buildCompetencyDimensions(interview, dimensionScores, assessmentScore);
+        double displayOverallScore = calculateCompositeOverallScore(dimensionScores, competencyDimensions,
+                answers, totalQuestions, assessmentScore);
 
         return AIInterviewSummaryResponse.builder()
                 .interviewId(interview.getId())
-                .overallScore(assessment.getOverallScore())
+                .overallScore(displayOverallScore)
                 .summary(readSummaryText(assessment.getSectionScores()))
                 .dimensionScores(dimensionScores)
-                .competencyModel(buildCompetencyDimensions(interview, dimensionScores, assessment.getOverallScore()))
+                .competencyModel(competencyDimensions)
                 .strengths(readJsonList(assessment.getStrengths()))
                 .weaknesses(readJsonList(assessment.getWeaknesses()))
                 .suggestions(readJsonList(assessment.getSuggestions()))
@@ -1042,7 +1060,8 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 .keywordCoverageScore(roundToOneDecimal(keywordCoverageScore))
                 .techStacks(readJsonList(interview.getSkillTags()))
                 .overview(buildSummaryOverview(interview, assessment, totalQuestions, answeredQuestions, durationSeconds,
-                        averageAnswerScore, expressionScore, keywordCoverageScore, questionReviews.size()))
+                        averageAnswerScore, expressionScore, keywordCoverageScore, questionReviews.size(),
+                        displayOverallScore, dimensionScores, competencyDimensions))
                 .questionReviews(questionReviews)
                 .completedAt(interview.getEndedAt())
                 .build();
@@ -1074,14 +1093,14 @@ public class AIInterviewServiceImpl implements AIInterviewService {
     private Map<String, Object> buildSummaryOverview(AIInterview interview, AIInterviewAssessment assessment,
                                                      int totalQuestions, int answeredQuestions, int durationSeconds,
                                                      double averageAnswerScore, double expressionScore, double keywordCoverageScore,
-                                                     int reviewCount) {
+                                                     int reviewCount, double overallScore, Map<String, Double> dimensionScores,
+                                                     List<AIInterviewSummaryResponse.CompetencyDimension> competencyDimensions) {
         Map<String, Object> overview = new LinkedHashMap<>();
         overview.put("targetPosition", interview.getTargetPosition());
         overview.put("interviewLanguage", interview.getInterviewLanguage());
-        overview.put("overallScore", roundToOneDecimal(assessment.getOverallScore() == null ? 0.0 : assessment.getOverallScore()));
-        Map<String, Double> dimensionScores = readDimensionScores(assessment.getSectionScores(), assessment.getOverallScore());
+        overview.put("overallScore", roundToOneDecimal(overallScore));
         overview.put("dimensionScores", dimensionScores);
-        overview.put("competencyModel", buildCompetencyDimensions(interview, dimensionScores, assessment.getOverallScore()));
+        overview.put("competencyModel", competencyDimensions);
         overview.put("averageAnswerScore", roundToOneDecimal(averageAnswerScore));
         overview.put("expressionScore", roundToOneDecimal(expressionScore));
         overview.put("keywordCoverageScore", roundToOneDecimal(keywordCoverageScore));
@@ -1384,23 +1403,123 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         if (scores == null || scores.isEmpty()) {
             return fallback;
         }
+        Map<String, Double> weights = resolveRoleDimensionWeights(dimension);
+        double weightSum = weights.values().stream().mapToDouble(Double::doubleValue).sum();
+        if (weightSum > 0) {
+            double score = 0.0;
+            for (Map.Entry<String, Double> entry : weights.entrySet()) {
+                score += scores.getOrDefault(entry.getKey(), fallback) * entry.getValue();
+            }
+            return roundToOneDecimal(score / weightSum);
+        }
+        return fallback;
+    }
+
+    private Map<String, Double> resolveRoleDimensionWeights(JobRoleSkillDimension dimension) {
+        Map<String, Double> weights = new LinkedHashMap<>();
+        for (String key : AIInterviewDimensionModel.keys()) {
+            weights.put(key, 0.0);
+        }
         String text = (blankToEmpty(dimension.getDimensionCode()) + " "
                 + blankToEmpty(dimension.getDimensionName()) + " "
                 + blankToEmpty(dimension.getDescription())).toLowerCase(Locale.ROOT);
+        String code = blankToEmpty(dimension.getDimensionCode());
+        if (AIInterviewDimensionModel.keys().contains(code)) {
+            weights.put(code, 1.0);
+            return weights;
+        }
+        applyKnownRoleDimensionWeights(code, weights);
+        if (text.contains("basic") || text.contains("基础") || text.contains("原理") || text.contains("知识")) {
+            addWeight(weights, AIInterviewDimensionModel.TECHNICAL_DEPTH, 0.70);
+            addWeight(weights, AIInterviewDimensionModel.PROBLEM_SOLVING, 0.30);
+        }
         if (text.contains("project") || text.contains("项目") || text.contains("业务") || text.contains("落地") || text.contains("复盘")) {
-            return scores.getOrDefault(AIInterviewDimensionModel.PROJECT_RELEVANCE, fallback);
+            addWeight(weights, AIInterviewDimensionModel.PROJECT_RELEVANCE, 0.60);
+            addWeight(weights, AIInterviewDimensionModel.JOB_MATCH, 0.25);
+            addWeight(weights, AIInterviewDimensionModel.PROBLEM_SOLVING, 0.15);
         }
         if (text.contains("design") || text.contains("设计") || text.contains("排查") || text.contains("优化")
                 || text.contains("治理") || text.contains("定位") || text.contains("问题") || text.contains("方案")) {
-            return scores.getOrDefault(AIInterviewDimensionModel.PROBLEM_SOLVING, fallback);
+            addWeight(weights, AIInterviewDimensionModel.PROBLEM_SOLVING, 0.52);
+            addWeight(weights, AIInterviewDimensionModel.TECHNICAL_DEPTH, 0.30);
+            addWeight(weights, AIInterviewDimensionModel.JOB_MATCH, 0.18);
         }
         if (text.contains("表达") || text.contains("沟通") || text.contains("协同") || text.contains("产品")) {
-            return scores.getOrDefault(AIInterviewDimensionModel.COMMUNICATION_CLARITY, fallback);
+            addWeight(weights, AIInterviewDimensionModel.COMMUNICATION_CLARITY, 0.58);
+            addWeight(weights, AIInterviewDimensionModel.PROJECT_RELEVANCE, 0.24);
+            addWeight(weights, AIInterviewDimensionModel.JOB_MATCH, 0.18);
         }
         if (text.contains("岗位") || text.contains("场景") || text.contains("匹配")) {
-            return scores.getOrDefault(AIInterviewDimensionModel.JOB_MATCH, fallback);
+            addWeight(weights, AIInterviewDimensionModel.JOB_MATCH, 0.55);
+            addWeight(weights, AIInterviewDimensionModel.PROJECT_RELEVANCE, 0.30);
+            addWeight(weights, AIInterviewDimensionModel.COMMUNICATION_CLARITY, 0.15);
         }
-        return scores.getOrDefault(AIInterviewDimensionModel.TECHNICAL_DEPTH, fallback);
+        return weights;
+    }
+
+    private void applyKnownRoleDimensionWeights(String code, Map<String, Double> weights) {
+        switch (blankToEmpty(code)) {
+            case "basicKnowledge":
+            case "frontendBasics":
+            case "mathBasics":
+            case "modelBasics":
+                addWeight(weights, AIInterviewDimensionModel.TECHNICAL_DEPTH, 0.70);
+                addWeight(weights, AIInterviewDimensionModel.PROBLEM_SOLVING, 0.30);
+                break;
+            case "projectExperience":
+                addWeight(weights, AIInterviewDimensionModel.PROJECT_RELEVANCE, 0.78);
+                addWeight(weights, AIInterviewDimensionModel.JOB_MATCH, 0.22);
+                break;
+            case "systemDesign":
+                addWeight(weights, AIInterviewDimensionModel.TECHNICAL_DEPTH, 0.35);
+                addWeight(weights, AIInterviewDimensionModel.PROBLEM_SOLVING, 0.40);
+                addWeight(weights, AIInterviewDimensionModel.JOB_MATCH, 0.25);
+                break;
+            case "codingAbility":
+            case "algorithmCoding":
+                addWeight(weights, AIInterviewDimensionModel.PROBLEM_SOLVING, 0.58);
+                addWeight(weights, AIInterviewDimensionModel.TECHNICAL_DEPTH, 0.34);
+                addWeight(weights, AIInterviewDimensionModel.COMMUNICATION_CLARITY, 0.08);
+                break;
+            case "frameworkAbility":
+                addWeight(weights, AIInterviewDimensionModel.TECHNICAL_DEPTH, 0.55);
+                addWeight(weights, AIInterviewDimensionModel.PROJECT_RELEVANCE, 0.45);
+                break;
+            case "engineering":
+            case "engineeringLanding":
+                addWeight(weights, AIInterviewDimensionModel.PROJECT_RELEVANCE, 0.55);
+                addWeight(weights, AIInterviewDimensionModel.PROBLEM_SOLVING, 0.30);
+                addWeight(weights, AIInterviewDimensionModel.JOB_MATCH, 0.15);
+                break;
+            case "interaction":
+            case "promptEngineering":
+                addWeight(weights, AIInterviewDimensionModel.COMMUNICATION_CLARITY, 0.42);
+                addWeight(weights, AIInterviewDimensionModel.PROBLEM_SOLVING, 0.33);
+                addWeight(weights, AIInterviewDimensionModel.JOB_MATCH, 0.25);
+                break;
+            case "performance":
+            case "ragAgent":
+                addWeight(weights, AIInterviewDimensionModel.TECHNICAL_DEPTH, 0.45);
+                addWeight(weights, AIInterviewDimensionModel.PROBLEM_SOLVING, 0.40);
+                addWeight(weights, AIInterviewDimensionModel.PROJECT_RELEVANCE, 0.15);
+                break;
+            case "modelUnderstanding":
+                addWeight(weights, AIInterviewDimensionModel.TECHNICAL_DEPTH, 0.58);
+                addWeight(weights, AIInterviewDimensionModel.COMMUNICATION_CLARITY, 0.22);
+                addWeight(weights, AIInterviewDimensionModel.JOB_MATCH, 0.20);
+                break;
+            case "businessLanding":
+                addWeight(weights, AIInterviewDimensionModel.PROJECT_RELEVANCE, 0.50);
+                addWeight(weights, AIInterviewDimensionModel.JOB_MATCH, 0.35);
+                addWeight(weights, AIInterviewDimensionModel.COMMUNICATION_CLARITY, 0.15);
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void addWeight(Map<String, Double> weights, String key, double weight) {
+        weights.put(key, weights.getOrDefault(key, 0.0) + weight);
     }
 
     private JobRole resolveInterviewJobRole(AIInterview interview) {
@@ -1465,6 +1584,74 @@ public class AIInterviewServiceImpl implements AIInterviewService {
             score += dimensionScores.getOrDefault(entry.getKey(), fallbackScore) * entry.getValue();
         }
         return roundToOneDecimal(score / weightSum);
+    }
+
+    private Map<String, Double> reconcileSummaryDimensionScores(Map<String, Double> summaryScores,
+                                                                Map<String, Double> answerScores,
+                                                                double fallbackScore) {
+        if (AIInterviewDimensionModel.hasSpread(summaryScores)) {
+            if (!AIInterviewDimensionModel.hasSpread(answerScores)) {
+                return summaryScores;
+            }
+            Map<String, Double> blended = new LinkedHashMap<>();
+            for (String key : AIInterviewDimensionModel.keys()) {
+                double summary = summaryScores.getOrDefault(key, fallbackScore);
+                double answer = answerScores.getOrDefault(key, summary);
+                blended.put(key, roundToOneDecimal(clampScore(summary * 0.45 + answer * 0.55)));
+            }
+            return blended;
+        }
+        if (AIInterviewDimensionModel.hasSpread(answerScores)) {
+            return answerScores;
+        }
+        return AIInterviewDimensionModel.defaultScores(fallbackScore);
+    }
+
+    private double calculateCompositeOverallScore(Map<String, Double> dimensionScores,
+                                                  List<AIInterviewSummaryResponse.CompetencyDimension> competencyDimensions,
+                                                  List<AIInterviewAnswer> answers,
+                                                  int totalQuestions,
+                                                  double fallbackScore) {
+        double radarScore = calculateWeightedOverallScore(dimensionScores, null, fallbackScore);
+        double competencyScore = calculateCompetencyDimensionScore(competencyDimensions, fallbackScore);
+        double averageAnswerScore = answers.stream()
+                .map(AIInterviewAnswer::getScore)
+                .filter(Objects::nonNull)
+                .mapToDouble(Double::doubleValue)
+                .average()
+                .orElse(fallbackScore);
+        double completionScore = totalQuestions <= 0 ? 0.0 : clampScore(answers.size() * 100.0 / totalQuestions);
+        double expressionScore = answers.stream()
+                .map(AIInterviewAnswer::getConfidenceLevel)
+                .filter(Objects::nonNull)
+                .mapToDouble(level -> clampScore(level * 10.0))
+                .average()
+                .orElse(averageAnswerScore);
+        double keywordScore = answers.stream()
+                .mapToDouble(this::calculateKeywordCoverageScore)
+                .average()
+                .orElse(averageAnswerScore);
+        double processScore = completionScore * 0.45 + expressionScore * 0.25 + keywordScore * 0.30;
+        double composite = radarScore * 0.40 + competencyScore * 0.35 + averageAnswerScore * 0.15 + processScore * 0.10;
+        return roundToOneDecimal(clampScore(composite));
+    }
+
+    private double calculateCompetencyDimensionScore(List<AIInterviewSummaryResponse.CompetencyDimension> dimensions,
+                                                     double fallbackScore) {
+        if (dimensions == null || dimensions.isEmpty()) {
+            return roundToOneDecimal(fallbackScore);
+        }
+        double score = 0.0;
+        double weightSum = 0.0;
+        for (AIInterviewSummaryResponse.CompetencyDimension dimension : dimensions) {
+            double weight = dimension.getWeight() == null ? 0.0 : Math.max(0.0, dimension.getWeight());
+            if (weight <= 0) {
+                continue;
+            }
+            score += (dimension.getScore() == null ? fallbackScore : dimension.getScore()) * weight;
+            weightSum += weight;
+        }
+        return roundToOneDecimal(weightSum <= 0 ? fallbackScore : score / weightSum);
     }
 
     private Map<String, Double> buildCompetencyModel(JobRole jobRole) {

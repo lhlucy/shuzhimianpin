@@ -21,7 +21,9 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
+import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
 import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
@@ -43,6 +45,9 @@ public class EmailService {
 
     @Value("${app.verification.max-attempts-per-ip:10}")
     private int maxAttemptsPerIp;
+
+    @Value("${spring.mail.username:}")
+    private String smtpUsername;
 
     @Transactional
     public void sendVerificationCode(String email, VerificationCode.CodeType type,
@@ -129,11 +134,18 @@ public class EmailService {
      */
     private void sendViaSmtp(String toEmail, String code, VerificationCode.CodeType type) {
         try {
+            String fromEmail = resolveFromEmail();
+            validateEmailAddress(toEmail, "收件人邮箱");
+
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
             // 设置发件人（必须与配置的一致）
-            helper.setFrom(emailConfig.getFrom());
+            if (StringUtils.hasText(emailConfig.getFromName())) {
+                helper.setFrom(fromEmail, emailConfig.getFromName().trim());
+            } else {
+                helper.setFrom(fromEmail);
+            }
 
             helper.setTo(toEmail);
 
@@ -165,10 +177,12 @@ public class EmailService {
             if (emailConfig.getSendgridApiKey() == null || emailConfig.getSendgridApiKey().isEmpty()) {
                 throw new RuntimeException("SendGrid API Key未配置");
             }
+            String fromEmail = resolveFromEmail();
+            validateEmailAddress(toEmail, "收件人邮箱");
 
             // SendGrid客户端
             SendGrid sg = new SendGrid(emailConfig.getSendgridApiKey());
-            Email from = new Email(emailConfig.getFrom(), emailConfig.getFromName());
+            Email from = new Email(fromEmail, emailConfig.getFromName());
             Email to = new Email(toEmail);
 
             String subject = getSubjectByType(type);
@@ -211,7 +225,7 @@ public class EmailService {
             case REGISTER -> emailConfig.getRegisterSubject();
             case RESET_PASSWORD -> emailConfig.getResetPasswordSubject();
             case ACCOUNT_DELETE -> emailConfig.getDeleteAccountSubject();
-            default -> "验证码 - 领书";
+            default -> "验证码 - 数智面聘";
         };
     }
 
@@ -226,6 +240,27 @@ public class EmailService {
             case ACCOUNT_DELETE -> "删除账号";
             default -> "操作";
         };
+    }
+
+    private String resolveFromEmail() {
+        String from = StringUtils.hasText(emailConfig.getFrom()) ? emailConfig.getFrom().trim() : smtpUsername;
+        if (!StringUtils.hasText(from)) {
+            throw new RuntimeException("邮件发件人未配置，请设置 MAIL_USERNAME，或显式设置 MAIL_FROM");
+        }
+        validateEmailAddress(from, "发件人邮箱");
+        return from.trim();
+    }
+
+    private void validateEmailAddress(String email, String fieldName) {
+        if (!StringUtils.hasText(email)) {
+            throw new RuntimeException(fieldName + "未配置或为空");
+        }
+        try {
+            InternetAddress address = new InternetAddress(email.trim(), true);
+            address.validate();
+        } catch (Exception ex) {
+            throw new RuntimeException(fieldName + "格式不合法: " + email);
+        }
     }
 
     private void checkSendFrequency(String ip) {

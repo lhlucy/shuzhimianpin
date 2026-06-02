@@ -2,7 +2,9 @@
   <div class="home-page">
     <header class="prototype-header">
       <router-link to="/user" class="prototype-brand" aria-label="数智面聘首页">
-        <span class="prototype-brand-mark">AI</span>
+        <span class="prototype-brand-mark">
+          <img src="/images/shuzhimianpin_logo.png" alt="" />
+        </span>
         <strong>数智面聘</strong>
       </router-link>
 
@@ -121,7 +123,15 @@
           </div>
 
           <div class="question-grid">
-            <article v-for="question in recommendedQuestions" :key="question.title" class="question-card">
+            <article
+              v-for="question in recommendedQuestions"
+              :key="question.id"
+              class="question-card"
+              tabindex="0"
+              role="link"
+              @click="openRecommendedQuestion(question)"
+              @keydown.enter.prevent="openRecommendedQuestion(question)"
+            >
               <span>{{ question.role }} · {{ question.difficulty }}</span>
               <h3>{{ question.title }}</h3>
               <p>{{ question.category }}</p>
@@ -269,10 +279,12 @@ const navItems = [
 const recommendedQuestions = computed(() =>
   roleBanks.value.flatMap((role) =>
     role.questions.slice(0, 1).map((question) => ({
+      id: question.id,
       title: question.title,
       difficulty: question.difficulty,
       category: question.category,
-      role: role.name
+      role: role.name,
+      roleCode: role.code
     }))
   )
 )
@@ -373,6 +385,14 @@ const goLogin = () => {
 
 const openInterviewSession = (interviewId: number) => {
   router.push(`/user/interview/ai/session/${interviewId}`)
+}
+
+const openRecommendedQuestion = (question: { id?: number, roleCode?: string }) => {
+  if (question.id && question.roleCode) {
+    router.push(`/user/practice?role=${question.roleCode}&question=${question.id}`)
+    return
+  }
+  router.push(question.roleCode ? `/user/practice?role=${question.roleCode}` : '/user/practice')
 }
 
 const loadRadarSummaries = async () => {
@@ -497,7 +517,7 @@ onBeforeUnmount(() => {
   min-height: 100vh;
   background:
     linear-gradient(180deg, rgba(255, 253, 251, 0.94) 0%, rgba(248, 249, 252, 0.92) 44%, #f3f5f9 100%),
-    url('/images/home-hero-lines.png') top right / min(72vw, 1100px) auto no-repeat;
+    url('/images/home-hero-lines-image2.png') top right / min(72vw, 1100px) auto no-repeat;
 }
 
 main {
@@ -536,10 +556,15 @@ main {
   display: grid;
   place-items: center;
   border-radius: 6px;
-  background: #ff5a2a;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 900;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: 0 8px 18px rgba(255, 90, 42, 0.18);
+}
+
+.prototype-brand-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .prototype-brand strong {
@@ -1317,6 +1342,12 @@ main {
   align-content: start;
   gap: 10px;
   text-align: left;
+  cursor: pointer;
+}
+
+.question-card:focus-visible {
+  outline: 3px solid rgba(255, 90, 42, 0.28);
+  outline-offset: 3px;
 }
 
 .question-card span {

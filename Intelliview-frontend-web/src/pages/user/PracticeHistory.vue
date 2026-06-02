@@ -2,7 +2,7 @@
   <div class="history-page">
     <aside class="app-sidebar">
       <router-link to="/user" class="brand">
-        <span>AI</span>
+        <span class="brand-logo"><img src="/images/shuzhimianpin_logo.png" alt="" /></span>
         <strong>数智面聘</strong>
       </router-link>
 
@@ -20,6 +20,18 @@
         <button type="button" :class="{ active: activeTab === 'practice' }" @click="activeTab = 'practice'">刷题记录</button>
       </div>
 
+      <div class="role-filter-bar">
+        <span>岗位筛选</span>
+        <el-select v-model="selectedRoleKey" placeholder="全部岗位" class="role-filter-select" filterable>
+          <el-option
+            v-for="role in roleFilterOptions"
+            :key="role.key"
+            :label="`${role.label}（${role.count}）`"
+            :value="role.key"
+          />
+        </el-select>
+      </div>
+
       <div v-if="loading" class="loading-wrap">
         <el-skeleton :rows="6" animated />
       </div>
@@ -31,7 +43,7 @@
               <strong>面试历史</strong>
               <p>支持自定义命名、查看最终报告，也可以删除不需要的记录。</p>
             </div>
-            <span class="history-count">共 {{ interviewHistory.length }} 场</span>
+            <span class="history-count">共 {{ filteredInterviewHistory.length }} 场</span>
           </div>
 
           <div class="history-scroll">
@@ -42,7 +54,7 @@
 
               <div class="history-copy">
                 <h2>{{ item.title }}</h2>
-                <p>{{ item.time }}　时长 {{ item.duration }}　{{ item.questions }} 道题　{{ item.statusText }}</p>
+                <p>{{ item.time }}　{{ item.roleName }}　时长 {{ item.duration }}　{{ item.questions }} 道题　{{ item.statusText }}</p>
               </div>
 
               <div class="metric-row interview-metrics">
@@ -73,7 +85,7 @@
               v-model:current-page="interviewPage"
               :page-size="interviewPageSize"
               layout="prev, pager, next"
-              :total="interviewHistory.length"
+              :total="filteredInterviewHistory.length"
               background
             />
           </div>
@@ -87,7 +99,7 @@
 
             <div class="history-copy">
               <h2>{{ item.title }}</h2>
-              <p>{{ item.time }}　{{ item.completedText }}</p>
+              <p>{{ item.time }}　{{ item.roleName }}　{{ item.completedText }}</p>
             </div>
 
             <div class="metric-row practice-metrics">
@@ -118,18 +130,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Clock, Collection, House, Monitor, Star, TrendCharts, User, VideoCamera } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import aiInterviewApi, { type AIInterviewHistoryItem } from '@/api/aiInterview'
 import practiceHistoryApi from '@/api/practiceHistory'
+import jobRoleApi, { type JobRoleOption } from '@/api/jobRoles'
 
 const router = useRouter()
 const loading = ref(false)
 const activeTab = ref<'interview' | 'practice'>('interview')
 const interviewHistory = ref<AIInterviewHistoryItem[]>([])
 const practiceHistory = ref<any[]>([])
+const jobRoles = ref<JobRoleOption[]>([])
+const selectedRoleKey = ref('all')
 const interviewPage = ref(1)
 const interviewPageSize = 6
 
@@ -164,14 +179,88 @@ const formatDuration = (seconds?: number) => {
   return remainSeconds ? `${minutes} 分 ${remainSeconds} 秒` : `${minutes} 分钟`
 }
 
+const normalizeRoleText = (value?: string) => (value || '').toLowerCase().replace(/\s+/g, '')
+
+const textRoleKey = (value?: string) => {
+  const normalized = normalizeRoleText(value)
+  return normalized ? `text:${normalized}` : ''
+}
+
+const getPracticeRoleId = (item: any) => Number(item?.jobRoleId || item?.primaryJobRoleId || item?.targetJobRoleId || 0)
+const getPracticeRoleLabel = (item: any) => item?.jobRoleName || item?.primaryJobRoleName || item?.targetPosition || item?.roleName || '未关联岗位'
+
+const matchesSelectedRole = (itemRoleId: number, itemRoleLabel?: string) => {
+  if (selectedRoleKey.value === 'all') return true
+  if (selectedRoleKey.value.startsWith('id:')) {
+    const selectedId = Number(selectedRoleKey.value.slice(3))
+    if (itemRoleId) return itemRoleId === selectedId
+    const selectedRole = jobRoles.value.find((role) => role.id === selectedId)
+    return Boolean(selectedRole && normalizeRoleText(itemRoleLabel).includes(normalizeRoleText(selectedRole.name)))
+  }
+  return textRoleKey(itemRoleLabel) === selectedRoleKey.value
+}
+
+const filteredInterviewHistory = computed(() =>
+  interviewHistory.value.filter((item) => matchesSelectedRole(Number(item.jobRoleId || 0), item.targetPosition || item.title))
+)
+
+const filteredPracticeHistory = computed(() =>
+  practiceHistory.value.filter((item) => matchesSelectedRole(getPracticeRoleId(item), getPracticeRoleLabel(item)))
+)
+
+const roleFilterOptions = computed(() => {
+  const counts = new Map<string, number>()
+  const labels = new Map<string, string>()
+  const addOption = (key: string, label: string) => {
+    if (!key || !label) return
+    counts.set(key, (counts.get(key) || 0) + 1)
+    labels.set(key, label)
+  }
+
+  interviewHistory.value.forEach((item) => {
+    const key = item.jobRoleId ? `id:${item.jobRoleId}` : textRoleKey(item.targetPosition || item.title)
+    addOption(key, item.targetPosition || item.title || '未关联岗位')
+  })
+  practiceHistory.value.forEach((item) => {
+    const roleId = getPracticeRoleId(item)
+    const label = getPracticeRoleLabel(item)
+    addOption(roleId ? `id:${roleId}` : textRoleKey(label), label)
+  })
+
+  const configuredOptions = jobRoles.value
+    .map((role) => ({
+      key: `id:${role.id}`,
+      label: role.name,
+      count: counts.get(`id:${role.id}`) || 0
+    }))
+    .filter((role) => role.count > 0)
+
+  const configuredKeys = new Set(configuredOptions.map((role) => role.key))
+  const extraOptions = [...counts.entries()]
+    .filter(([key]) => key !== 'all' && !configuredKeys.has(key))
+    .map(([key, count]) => ({
+      key,
+      label: labels.get(key) || '未关联岗位',
+      count
+    }))
+    .sort((a, b) => b.count - a.count)
+
+  return [
+    { key: 'all', label: '全部岗位', count: interviewHistory.value.length + practiceHistory.value.length },
+    ...configuredOptions,
+    ...extraOptions
+  ]
+})
+
 const interviewCards = computed(() =>
-  interviewHistory.value.map((item, index: number) => {
+  filteredInterviewHistory.value.map((item, index: number) => {
     const score = Number(item.totalScore || 0)
     const progress = Math.min(100, Math.round(((item.answeredCount || 0) / Math.max(item.questionCount || 1, 1)) * 100))
     const completed = item.status === 'COMPLETED'
     return {
       id: item.interviewId,
       title: item.title || item.targetPosition || '模拟面试',
+      roleName: item.targetPosition || '未关联岗位',
       time: formatDateTime(item.createdAt),
       duration: formatDuration(item.duration || 0),
       questions: item.questionCount || 0,
@@ -198,11 +287,12 @@ const pagedInterviewCards = computed(() => {
 })
 
 const practiceCards = computed(() =>
-  practiceHistory.value.map((item: any) => {
+  filteredPracticeHistory.value.map((item: any) => {
     return {
       id: item.id || `${item.questionId}-${item.practiceTime || item.createdAt || ''}`,
       questionId: Number(item.questionId || item.id || 0),
       title: item.questionTitle || item.title || `题目 ${item.questionId || ''}`,
+      roleName: getPracticeRoleLabel(item),
       time: formatDateTime(item.practiceTime || item.createdAt || item.updatedAt),
       completed: Boolean(item.completed),
       completedText: item.completed ? '已完成' : '未完成',
@@ -214,9 +304,10 @@ const practiceCards = computed(() =>
 const loadHistoryData = async () => {
   loading.value = true
   try {
-    const [interviewResult, practiceResult] = await Promise.allSettled([
+    const [interviewResult, practiceResult, roleResult] = await Promise.allSettled([
       aiInterviewApi.getInterviewHistory(50),
-      practiceHistoryApi.getUserPracticeHistory(0, 50)
+      practiceHistoryApi.getUserPracticeHistory(0, 50),
+      jobRoleApi.listJobRoles()
     ])
 
     if (interviewResult.status === 'fulfilled') {
@@ -232,6 +323,12 @@ const loadHistoryData = async () => {
       practiceHistory.value = result?.records || result?.list || (Array.isArray(result) ? result : [])
     } else {
       practiceHistory.value = []
+    }
+
+    if (roleResult.status === 'fulfilled') {
+      jobRoles.value = Array.isArray(roleResult.value) ? roleResult.value : []
+    } else {
+      jobRoles.value = []
     }
   } catch (error) {
     console.error('加载历史记录失败:', error)
@@ -266,7 +363,7 @@ const deleteInterviewRecord = async (interviewId: number) => {
     })
     await aiInterviewApi.deleteInterview(interviewId)
     interviewHistory.value = interviewHistory.value.filter((item) => item.interviewId !== interviewId)
-    interviewPage.value = Math.min(interviewPage.value, Math.max(1, Math.ceil(interviewHistory.value.length / interviewPageSize)))
+    interviewPage.value = Math.min(interviewPage.value, Math.max(1, Math.ceil(filteredInterviewHistory.value.length / interviewPageSize)))
     ElMessage.success('面试记录已删除')
   } catch (error: any) {
     if (error === 'cancel' || error === 'close') return
@@ -281,6 +378,14 @@ const openPracticeQuestion = (questionId: number) => {
   }
   router.push(`/question/${questionId}`)
 }
+
+watch([selectedRoleKey, activeTab], () => {
+  interviewPage.value = 1
+})
+
+watch(filteredInterviewHistory, () => {
+  interviewPage.value = Math.min(interviewPage.value, Math.max(1, Math.ceil(filteredInterviewHistory.value.length / interviewPageSize)))
+})
 
 onMounted(loadHistoryData)
 </script>
@@ -313,16 +418,21 @@ onMounted(loadHistoryData)
   gap: 10px;
 }
 
-.brand span {
+.brand-logo {
   width: 30px;
   height: 30px;
   display: grid;
   place-items: center;
   border-radius: 7px;
-  background: #ff5a2a;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 900;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: 0 8px 18px rgba(255, 90, 42, 0.18);
+}
+
+.brand-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand strong {
@@ -384,6 +494,28 @@ onMounted(loadHistoryData)
 .history-tabs button.active {
   color: #ff5a2a;
   border-bottom-color: #ff5a2a;
+}
+
+.role-filter-bar {
+  margin: -14px 0 24px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  border: 1px solid #e8edf5;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.role-filter-bar span {
+  color: #778197;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.role-filter-select {
+  width: 240px;
 }
 
 .loading-wrap {
@@ -628,6 +760,10 @@ onMounted(loadHistoryData)
     flex-direction: column;
   }
 
+  .role-filter-bar {
+    justify-content: flex-start;
+  }
+
   .history-scroll {
     max-height: none;
   }
@@ -659,6 +795,15 @@ onMounted(loadHistoryData)
   .practice-metrics,
   .metric-row {
     grid-template-columns: 1fr;
+  }
+
+  .role-filter-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .role-filter-select {
+    width: 100%;
   }
 }
 </style>

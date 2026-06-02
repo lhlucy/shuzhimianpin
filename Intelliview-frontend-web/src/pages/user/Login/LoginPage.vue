@@ -2,7 +2,7 @@
   <div class="auth-page">
     <section class="brand-side">
       <router-link to="/user" class="brand">
-        <span>AI</span>
+        <span class="brand-logo"><img src="/images/shuzhimianpin_logo.png" alt="" /></span>
         <strong>数智面聘</strong>
       </router-link>
 
@@ -221,16 +221,21 @@ onMounted(loadCaptcha)
   width: fit-content;
 }
 
-.brand span {
+.brand-logo {
   width: 34px;
   height: 34px;
   display: grid;
   place-items: center;
   border-radius: 8px;
-  color: #ffffff;
-  background: #ff5a2a;
-  font-size: 13px;
-  font-weight: 900;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: 0 10px 22px rgba(255, 90, 42, 0.2);
+}
+
+.brand-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand strong {

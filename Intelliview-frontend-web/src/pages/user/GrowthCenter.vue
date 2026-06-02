@@ -2,7 +2,7 @@
   <div class="growth-page">
     <aside class="app-sidebar">
       <router-link to="/user" class="brand">
-        <span>AI</span>
+        <span class="brand-logo"><img src="/images/shuzhimianpin_logo.png" alt="" /></span>
         <strong>数智面聘</strong>
       </router-link>
 
@@ -18,12 +18,12 @@
       <section class="growth-hero">
         <div>
           <span>Growth Center</span>
-          <h1>{{ activeRole.name }}成长中心</h1>
+          <h1>成长中心</h1>
           <p>围绕一个重点岗位持续训练，系统会按岗位评分模型生成加权总分和专属能力曲线，同时保留其他岗位的数据概览。</p>
         </div>
         <div class="hero-stat">
           <strong>{{ selectedCompletedRecords.length }}</strong>
-          <span>重点岗位样本</span>
+          <span>{{ activeRole.key === 'overview' ? '总览样本' : '重点岗位样本' }}</span>
         </div>
       </section>
 
@@ -65,7 +65,7 @@
               <h2>面试记录</h2>
               <p>选择{{ activeRole.name }}已完成并生成报告的记录</p>
             </div>
-            <button type="button" @click="selectRecentCompleted">选择该岗位最近 5 场</button>
+            <button type="button" @click="selectRecentCompleted">选择最近 5 场</button>
           </div>
 
           <div v-if="loading" class="loading-box">
@@ -87,7 +87,7 @@
         <article class="chart-panel">
           <div class="panel-head">
             <div>
-              <h2>{{ activeRole.name }}岗位成长曲线</h2>
+              <h2>{{ activeRole.name }}成长曲线</h2>
               <p>{{ roleModelSummary }}，曲线按所选面试报告动态折算</p>
             </div>
             <div class="chart-tools">
@@ -321,6 +321,14 @@ const FALLBACK_ROLE_MODEL: RoleModel = {
   dimensions: LEGACY_DIMENSIONS
 }
 
+const OVERVIEW_ROLE_MODEL: RoleModel = {
+  key: 'overview',
+  name: '总览',
+  description: '汇总所有已加入成长路线的面试报告，适合查看整体能力变化；切换具体岗位后可查看岗位专属成长路线。',
+  aliases: [],
+  dimensions: LEGACY_DIMENSIONS
+}
+
 const DEFAULT_ROLE = ROLE_MODELS[0]
 
 const navItems = [
@@ -343,6 +351,7 @@ const summaries = ref<Record<number, AIInterviewSummary>>({})
 const lineChartRef = ref<HTMLElement>()
 let chart: echarts.ECharts | null = null
 let summaryLoadSeq = 0
+let chartRenderSeq = 0
 const router = useRouter()
 
 const completedRecords = computed(() => records.value.filter((item) => item.status === 'COMPLETED'))
@@ -357,7 +366,10 @@ const roleGroups = computed(() => {
   if (!groups.size) {
     ROLE_MODELS.slice(0, 4).forEach((model) => groups.set(model.key, { model, records: [] }))
   }
-  return [...groups.values()].sort((a, b) => b.records.length - a.records.length)
+  return [
+    { model: OVERVIEW_ROLE_MODEL, records: completedRecords.value },
+    ...[...groups.values()].sort((a, b) => b.records.length - a.records.length)
+  ]
 })
 const roleOptions = computed(() => roleGroups.value.map((group) => ({
   key: group.model.key,
@@ -369,7 +381,10 @@ const activeRole = computed(() => {
   return matched?.model || roleGroups.value[0]?.model || DEFAULT_ROLE
 })
 const activeDimensions = computed(() => activeRole.value.dimensions)
-const focusedCompletedRecords = computed(() => completedRecords.value.filter((item) => findRoleModel(item.targetPosition || item.title).key === activeRole.value.key))
+const focusedCompletedRecords = computed(() => {
+  if (activeRole.value.key === 'overview') return completedRecords.value
+  return completedRecords.value.filter((item) => findRoleModel(item.targetPosition || item.title).key === activeRole.value.key)
+})
 const selectedCompletedRecords = computed(() => focusedCompletedRecords.value.filter((item) => selectedIds.value.includes(item.interviewId)))
 const chartPoints = computed(() => selectedCompletedRecords.value
   .slice()
@@ -378,7 +393,7 @@ const chartPoints = computed(() => selectedCompletedRecords.value
 )
 const roleModelSummary = computed(() => activeDimensions.value.map((dimension) => `${dimension.label}${dimension.weight}%`).join(' + '))
 const otherRoleStats = computed(() => roleGroups.value
-  .filter((group) => group.model.key !== activeRole.value.key && group.records.length)
+  .filter((group) => group.model.key !== 'overview' && group.model.key !== activeRole.value.key && group.records.length)
   .map((group) => {
     const sorted = group.records.slice().sort((a, b) => new Date(b.endedAt || b.createdAt).getTime() - new Date(a.endedAt || a.createdAt).getTime())
     const scores = group.records.map((item) => Number(item.totalScore || 0)).filter((score) => score > 0)
@@ -504,11 +519,14 @@ function readStoredIds() {
 }
 
 function persistSelectedIds() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(selectedIds.value))
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(new Set(selectedIds.value)).slice(0, 100)))
 }
 
 function selectRecentCompleted() {
-  selectedIds.value = focusedCompletedRecords.value.slice(0, 5).map((item) => item.interviewId)
+  const focusedIds = new Set(focusedCompletedRecords.value.map((item) => item.interviewId))
+  const otherSelectedIds = selectedIds.value.filter((id) => !focusedIds.has(id))
+  const nextFocusedIds = focusedCompletedRecords.value.slice(0, 5).map((item) => item.interviewId)
+  selectedIds.value = [...otherSelectedIds, ...nextFocusedIds]
 }
 
 async function loadSummaries() {
@@ -524,7 +542,7 @@ async function loadSummaries() {
   const missingIds = currentIds.filter((id) => !summaries.value[id])
   if (!missingIds.length) {
     summaryLoading.value = false
-    await renderChart()
+    scheduleRenderChart()
     return
   }
   summaryLoading.value = true
@@ -536,39 +554,95 @@ async function loadSummaries() {
         summaries.value[missingIds[index]] = result.value
       }
     })
-    await renderChart()
   } finally {
     if (seq === summaryLoadSeq) {
       summaryLoading.value = false
+      scheduleRenderChart()
     }
   }
 }
 
+function disposeChart() {
+  chart?.dispose()
+  chart = null
+}
+
+function getChartValues() {
+  return chartPoints.value.flatMap((item) => {
+    const summary = summaries.value[item.interviewId]
+    return [
+      calculateWeightedScore(summary),
+      ...activeDimensions.value.map((dimension) => calculateDimensionScore(summary, dimension))
+    ].filter((value) => Number.isFinite(value))
+  })
+}
+
+function getYAxisRange() {
+  const values = getChartValues()
+  if (!values.length) return { min: 0, max: 100 }
+  const minValue = Math.min(...values)
+  const maxValue = Math.max(...values)
+  const min = Math.max(0, Math.floor(minValue - 5))
+  const max = Math.min(100, Math.ceil(maxValue + 5))
+  if (min === max) {
+    return {
+      min: Math.max(0, min - 5),
+      max: Math.min(100, max + 5)
+    }
+  }
+  return { min, max }
+}
+
+function scheduleRenderChart() {
+  const seq = ++chartRenderSeq
+  window.setTimeout(() => {
+    if (seq === chartRenderSeq) {
+      void renderChart()
+    }
+  }, 0)
+}
+
 async function renderChart() {
+  const seq = ++chartRenderSeq
   await nextTick()
   if (chartView.value !== 'line') return
+  if (summaryLoading.value) return
   if (!selectedIds.value.length) {
-    chart?.dispose()
-    chart = null
+    disposeChart()
     return
   }
   if (!lineChartRef.value) return
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  if (seq !== chartRenderSeq) return
   if (!lineChartRef.value) return
   const bounds = lineChartRef.value.getBoundingClientRect()
   if (bounds.width < 20 || bounds.height < 20) {
-    window.setTimeout(() => renderChart(), 80)
+    window.setTimeout(() => {
+      if (seq === chartRenderSeq) void renderChart()
+    }, 80)
+    return
+  }
+  if (!chartPoints.value.length) {
+    disposeChart()
     return
   }
   if (!chart) chart = echarts.init(lineChartRef.value)
   const labels = chartPoints.value.map((item, index) => `${index + 1}. ${formatDateTime(item.endedAt || item.createdAt)}`)
+  const yAxisRange = getYAxisRange()
+  chart.clear()
   chart.setOption({
     color: ['#252936', ...activeDimensions.value.map((item) => item.color)],
     tooltip: { trigger: 'axis' },
     legend: { top: 0, icon: 'roundRect', textStyle: { color: '#435064', fontWeight: 700 } },
     grid: { left: 36, right: 24, top: 54, bottom: 34 },
     xAxis: { type: 'category', boundaryGap: false, data: labels, axisLabel: { color: '#788397' } },
-    yAxis: { type: 'value', min: 0, max: 100, splitLine: { lineStyle: { color: '#edf1f6' } }, axisLabel: { color: '#788397' } },
+    yAxis: {
+      type: 'value',
+      min: yAxisRange.min,
+      max: yAxisRange.max,
+      splitLine: { lineStyle: { color: '#edf1f6' } },
+      axisLabel: { color: '#788397' }
+    },
     series: [
       {
         name: '加权总分',
@@ -591,7 +665,7 @@ async function renderChart() {
         data: chartPoints.value.map((item) => calculateDimensionScore(summaries.value[item.interviewId], dimension))
       }))
     ]
-  })
+  }, true)
   chart.resize()
 }
 
@@ -605,7 +679,7 @@ async function loadPage() {
     readStoredIds()
     records.value = await aiInterviewApi.getInterviewHistory(100)
     if (!selectedRoleKey.value) {
-      selectedRoleKey.value = roleGroups.value[0]?.model.key || DEFAULT_ROLE.key
+      selectedRoleKey.value = OVERVIEW_ROLE_MODEL.key
     }
     if (!selectedIds.value.length || !selectedIds.value.some((id) => focusedCompletedRecords.value.some((item) => item.interviewId === id))) {
       selectedIds.value = focusedCompletedRecords.value.slice(0, 5).map((item) => item.interviewId)
@@ -623,11 +697,10 @@ watch(selectedIds, () => {
 
 watch(chartView, async (value) => {
   if (value === 'line') {
-    await renderChart()
+    scheduleRenderChart()
     return
   }
-  chart?.dispose()
-  chart = null
+  disposeChart()
 })
 
 watch(selectedRoleKey, async () => {
@@ -639,10 +712,15 @@ watch(selectedRoleKey, async () => {
 })
 
 watch(
-  [chartPoints, summaryLoading],
+  [
+    () => activeRole.value.key,
+    () => chartPoints.value.map((item) => item.interviewId).join(','),
+    () => activeDimensions.value.map((item) => item.key).join(','),
+    summaryLoading
+  ],
   async () => {
     if (!summaryLoading.value && chartView.value === 'line') {
-      await renderChart()
+      scheduleRenderChart()
     }
   },
   { deep: true, flush: 'post' }
@@ -659,7 +737,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resizeChart)
-  chart?.dispose()
+  disposeChart()
 })
 </script>
 
@@ -692,16 +770,21 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
-.brand span {
+.brand-logo {
   width: 30px;
   height: 30px;
   display: grid;
   place-items: center;
   border-radius: 7px;
-  background: #e85d3f;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 900;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: 0 8px 18px rgba(255, 90, 42, 0.18);
+}
+
+.brand-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand strong,
@@ -898,7 +981,7 @@ onBeforeUnmount(() => {
 .weight-grid {
   margin-top: 18px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 

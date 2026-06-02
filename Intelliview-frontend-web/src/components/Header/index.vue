@@ -1,7 +1,9 @@
 <template>
   <header class="header">
     <router-link to="/user" class="brand" aria-label="数智面聘首页">
-      <span class="brand-mark">智</span>
+      <span class="brand-mark">
+        <img src="/images/shuzhimianpin_logo.png" alt="" />
+      </span>
       <span class="brand-text">
         <strong>数智面聘</strong>
         <small>AI 模拟面试与岗位刷题</small>
@@ -97,11 +99,16 @@ onMounted(() => {
   height: 42px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
-  color: #fff;
-  font-weight: 900;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
-  box-shadow: var(--shadow-soft);
+  border-radius: 13px;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: 0 10px 24px rgba(255, 106, 0, 0.18);
+}
+
+.brand-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand-text {
