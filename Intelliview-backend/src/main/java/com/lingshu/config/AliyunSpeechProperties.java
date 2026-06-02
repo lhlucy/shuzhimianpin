@@ -17,6 +17,12 @@ public class AliyunSpeechProperties {
 
     private String asrModel = "qwen3-asr-flash";
 
+    private String realtimeAsrUrl = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime";
+
+    private String realtimeAsrModel = "qwen3-asr-flash-realtime-2026-02-10";
+
+    private int realtimeSampleRate = 16000;
+
     private String ttsUrl = "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer";
 
     private String ttsModel = "cosyvoice-v3-flash";

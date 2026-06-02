@@ -525,6 +525,7 @@ import aiInterviewApi, {
   type AIInterviewSession,
   type AIInterviewSummary
 } from '@/api/aiInterview'
+import { apiBaseUrl } from '@/utils/axios'
 import resumeApi, { type UserResume } from '@/api/resumes'
 import AvatarDigitalHumanPlayer from '@/components/AIInterview/AvatarDigitalHumanPlayer.vue'
 
@@ -618,16 +619,24 @@ let elapsedTimer: number | undefined
 const elapsedSeconds = ref(0)
 let mediaRecorder: MediaRecorder | null = null
 let audioChunks: Blob[] = []
+let voiceSocket: WebSocket | null = null
+let voiceStream: MediaStream | null = null
+let audioContext: AudioContext | null = null
+let audioSource: MediaStreamAudioSourceNode | null = null
+let audioProcessor: ScriptProcessorNode | null = null
 const cameraStream = ref<MediaStream | null>(null)
-let speechRecognition: any = null
-let keepSpeechRecognitionAlive = false
-let speechRecognitionStarted = false
+let voiceAnswerStartedAt = 0
+let voiceTranscriptBase = ''
 let avatarClosingPromise: Promise<void> | null = null
 let radarChart: echarts.ECharts | null = null
 let scoringModelChart: echarts.ECharts | null = null
 let pageExitHandled = false
 const cameraError = ref('')
 const voiceError = ref('')
+const realtimeEmotion = ref('')
+const lastAnswerInputMode = ref<'TEXT' | 'VOICE'>('TEXT')
+
+const REALTIME_ASR_SAMPLE_RATE = 16000
 
 const interviewId = computed(() => Number(route.params.id))
 const reportMode = computed(() => route.query.report === '1')
@@ -679,8 +688,7 @@ const elapsedLabel = computed(() => {
 })
 const recognitionSupported = computed(() => {
   if (typeof window === 'undefined') return false
-  const speechApi = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-  return Boolean(speechApi)
+  return Boolean(window.WebSocket && typeof navigator.mediaDevices?.getUserMedia === 'function' && ((window as any).AudioContext || (window as any).webkitAudioContext))
 })
 const voiceDisplayText = computed(() => {
   const merged = [liveTranscript.value, interimTranscript.value].filter(Boolean).join('').trim()
@@ -1409,9 +1417,11 @@ const submitAnswer = async () => {
   try {
     const result = await aiInterviewApi.submitAnswer(session.value.interviewId, questionId, {
       content,
-      inputMode: 'TEXT',
-      duration: elapsedSeconds.value
+      inputMode: lastAnswerInputMode.value,
+      duration: voiceAnswerStartedAt > 0 ? Math.max(1, Math.round((Date.now() - voiceAnswerStartedAt) / 1000)) : elapsedSeconds.value
     })
+    lastAnswerInputMode.value = 'TEXT'
+    voiceAnswerStartedAt = 0
     if (result.interviewerReply) {
       pushMessage('ai', result.interviewerReply)
     }
@@ -1563,91 +1573,142 @@ const syncDraftWithTranscript = () => {
   }
 }
 
-const buildRecognitionLanguage = () => {
+const buildRealtimeAsrLanguage = () => {
   const language = (session.value?.interviewLanguage || '').toLowerCase()
-  if (language.startsWith('en')) return 'en-US'
-  if (language.startsWith('ja')) return 'ja-JP'
-  return 'zh-CN'
+  return language.startsWith('en') || language.includes('english') || language.includes('英文') ? 'en' : 'zh'
 }
 
-const ensureSpeechRecognition = () => {
-  if (speechRecognition || typeof window === 'undefined') return speechRecognition
-  const SpeechRecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-  if (!SpeechRecognitionCtor) return null
+const buildRealtimeAsrUrl = () => {
+  const token = localStorage.getItem('token') || ''
+  const base = new URL(apiBaseUrl)
+  base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:'
+  base.pathname = '/ws/ai/asr/realtime'
+  base.search = ''
+  base.searchParams.set('token', token)
+  base.searchParams.set('language', buildRealtimeAsrLanguage())
+  return base.toString()
+}
 
-  speechRecognition = new SpeechRecognitionCtor()
-  speechRecognition.continuous = true
-  speechRecognition.interimResults = true
-  speechRecognition.lang = buildRecognitionLanguage()
-
-  speechRecognition.onstart = () => {
-    speechRecognitionStarted = true
+const connectRealtimeAsr = () => new Promise<void>((resolve, reject) => {
+  if (voiceSocket && voiceSocket.readyState === WebSocket.OPEN) {
+    resolve()
+    return
   }
+  const socket = new WebSocket(buildRealtimeAsrUrl())
+  voiceSocket = socket
+  const timeout = window.setTimeout(() => {
+    reject(new Error('实时语音识别连接超时'))
+    socket.close()
+  }, 8000)
 
-  speechRecognition.onresult = (event: any) => {
-    let finalChunk = ''
-    let interimChunk = ''
-
-    for (let index = event.resultIndex; index < event.results.length; index += 1) {
-      const transcript = event.results[index]?.[0]?.transcript || ''
-      if (event.results[index].isFinal) {
-        finalChunk += transcript
-      } else {
-        interimChunk += transcript
+  socket.onopen = () => {
+    window.clearTimeout(timeout)
+    resolve()
+  }
+  socket.onerror = () => {
+    window.clearTimeout(timeout)
+    reject(new Error('实时语音识别连接失败'))
+  }
+  socket.onmessage = (event) => {
+    try {
+      const payload = JSON.parse(String(event.data))
+      if (payload.type === 'partial') {
+        interimTranscript.value = String(payload.displayText || `${payload.text || ''}${payload.stash || ''}`).trim()
+        realtimeEmotion.value = payload.emotion || realtimeEmotion.value
+        syncDraftWithTranscript()
+      } else if (payload.type === 'final') {
+        const transcript = String(payload.transcript || '').trim()
+        if (transcript) {
+          liveTranscript.value = [voiceTranscriptBase, transcript].filter(Boolean).join('')
+          draft.value = liveTranscript.value
+        }
+        realtimeEmotion.value = payload.emotion || realtimeEmotion.value
+        interimTranscript.value = ''
+      } else if (payload.type === 'error') {
+        voiceError.value = payload.message || '实时语音识别失败'
       }
-    }
-
-    if (finalChunk.trim()) {
-      liveTranscript.value = `${liveTranscript.value}${finalChunk}`.trim()
-    }
-    interimTranscript.value = interimChunk.trim()
-    syncDraftWithTranscript()
-  }
-
-  speechRecognition.onerror = (event: any) => {
-    if (event?.error === 'aborted' || event?.error === 'no-speech') return
-    ElMessage.warning('实时语音识别暂时不可用，停止录音后会自动转写')
-  }
-
-  speechRecognition.onend = () => {
-    speechRecognitionStarted = false
-    if (recording.value && keepSpeechRecognitionAlive) {
-      try {
-        speechRecognition.lang = buildRecognitionLanguage()
-        speechRecognition.start()
-      } catch {
-        // Ignore restart failures and keep recorder working.
-      }
+    } catch {
+      // Ignore non-JSON heartbeat or protocol noise.
     }
   }
+  socket.onclose = () => {
+    if (voiceSocket === socket) {
+      voiceSocket = null
+    }
+  }
+})
 
-  return speechRecognition
-}
-
-const startSpeechRecognition = () => {
-  const recognition = ensureSpeechRecognition()
-  if (!recognition) return
-  keepSpeechRecognitionAlive = true
-  recognition.lang = buildRecognitionLanguage()
-  try {
-    recognition.start()
-  } catch {
-    // Ignore duplicate start calls while recognition is already active.
+const stopRealtimeAsr = () => {
+  if (!voiceSocket) return
+  if (voiceSocket.readyState === WebSocket.OPEN) {
+    voiceSocket.send(JSON.stringify({ type: 'finish' }))
+    window.setTimeout(() => voiceSocket?.close(), 600)
+  } else {
+    voiceSocket.close()
   }
 }
 
-const stopSpeechRecognition = () => {
-  keepSpeechRecognitionAlive = false
-  if (!speechRecognition || !speechRecognitionStarted) return
-  try {
-    speechRecognition.stop()
-  } catch {
-    // Ignore stop failures during teardown.
+const downsampleBuffer = (buffer: Float32Array, inputSampleRate: number, outputSampleRate: number) => {
+  if (outputSampleRate === inputSampleRate) return buffer
+  const ratio = inputSampleRate / outputSampleRate
+  const newLength = Math.round(buffer.length / ratio)
+  const result = new Float32Array(newLength)
+  let offsetResult = 0
+  let offsetBuffer = 0
+  while (offsetResult < result.length) {
+    const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio)
+    let accum = 0
+    let count = 0
+    for (let index = offsetBuffer; index < nextOffsetBuffer && index < buffer.length; index += 1) {
+      accum += buffer[index]
+      count += 1
+    }
+    result[offsetResult] = count > 0 ? accum / count : 0
+    offsetResult += 1
+    offsetBuffer = nextOffsetBuffer
   }
+  return result
+}
+
+const encodePcm16 = (input: Float32Array) => {
+  const output = new Int16Array(input.length)
+  for (let index = 0; index < input.length; index += 1) {
+    const sample = Math.max(-1, Math.min(1, input[index]))
+    output[index] = sample < 0 ? sample * 0x8000 : sample * 0x7fff
+  }
+  return output.buffer
+}
+
+const startPcmStreaming = async (stream: MediaStream) => {
+  const AudioContextCtor = (window as any).AudioContext || (window as any).webkitAudioContext
+  const context = new AudioContextCtor()
+  const source = context.createMediaStreamSource(stream)
+  const processor = context.createScriptProcessor(4096, 1, 1)
+  audioContext = context
+  audioSource = source
+  audioProcessor = processor
+  processor.onaudioprocess = (event: AudioProcessingEvent) => {
+    if (!voiceSocket || voiceSocket.readyState !== WebSocket.OPEN) return
+    const input = event.inputBuffer.getChannelData(0)
+    const downsampled = downsampleBuffer(input, context.sampleRate || 48000, REALTIME_ASR_SAMPLE_RATE)
+    voiceSocket.send(encodePcm16(downsampled))
+  }
+  source.connect(processor)
+  processor.connect(context.destination)
+}
+
+const stopPcmStreaming = () => {
+  audioProcessor?.disconnect()
+  audioSource?.disconnect()
+  audioProcessor = null
+  audioSource = null
+  audioContext?.close().catch(() => undefined)
+  audioContext = null
 }
 
 const stopVoiceCapture = () => {
-  stopSpeechRecognition()
+  stopPcmStreaming()
+  stopRealtimeAsr()
   if (mediaRecorder && recording.value) {
     mediaRecorder.stop()
   }
@@ -1659,15 +1720,33 @@ const startVoiceCapture = async (silent = false) => {
   voiceError.value = ''
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    voiceStream = stream
     audioChunks = []
-    liveTranscript.value = draft.value.trim()
+    voiceTranscriptBase = draft.value.trim()
+    liveTranscript.value = voiceTranscriptBase
     interimTranscript.value = ''
+    realtimeEmotion.value = ''
+    lastAnswerInputMode.value = 'VOICE'
+    voiceAnswerStartedAt = Date.now()
+    await connectRealtimeAsr()
+    await startPcmStreaming(stream)
     mediaRecorder = new MediaRecorder(stream)
     mediaRecorder.ondataavailable = (event) => {
       if (event.data.size > 0) audioChunks.push(event.data)
     }
     mediaRecorder.onstop = async () => {
       stream.getTracks().forEach((track) => track.stop())
+      if (voiceStream === stream) {
+        voiceStream = null
+      }
+      const realtimeText = [liveTranscript.value, interimTranscript.value].filter(Boolean).join('').trim()
+      if (realtimeText && realtimeText !== voiceTranscriptBase) {
+        liveTranscript.value = realtimeText
+        draft.value = realtimeText
+        interimTranscript.value = ''
+        transcribing.value = false
+        return
+      }
       const blob = new Blob(audioChunks, { type: 'audio/webm' })
       const file = new File([blob], 'answer.webm', { type: 'audio/webm' })
       transcribing.value = true
@@ -1685,10 +1764,13 @@ const startVoiceCapture = async (silent = false) => {
         transcribing.value = false
       }
     }
-    mediaRecorder.start()
-    startSpeechRecognition()
+    mediaRecorder.start(1000)
     recording.value = true
   } catch (error: any) {
+    stopPcmStreaming()
+    stopRealtimeAsr()
+    voiceStream?.getTracks().forEach((track) => track.stop())
+    voiceStream = null
     voiceError.value = error?.message || '麦克风权限未开启'
     if (!silent) {
       ElMessage.error('无法访问麦克风，请检查浏览器权限')
@@ -1783,7 +1865,8 @@ onUnmounted(() => {
   window.removeEventListener('resize', resizeRadarChart)
   if (elapsedTimer) window.clearInterval(elapsedTimer)
   stopCameraPreview()
-  stopSpeechRecognition()
+  stopPcmStreaming()
+  stopRealtimeAsr()
   radarChart?.dispose()
   radarChart = null
   scoringModelChart?.dispose()

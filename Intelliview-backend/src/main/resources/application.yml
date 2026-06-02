@@ -131,6 +131,9 @@ app:
         api-key: ${DASHSCOPE_API_KEY:}
         asr-base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
         asr-model: qwen3-asr-flash
+        realtime-asr-url: ${ALIYUN_REALTIME_ASR_URL:wss://dashscope.aliyuncs.com/api-ws/v1/realtime}
+        realtime-asr-model: ${ALIYUN_REALTIME_ASR_MODEL:qwen3-asr-flash-realtime-2026-02-10}
+        realtime-sample-rate: ${ALIYUN_REALTIME_SAMPLE_RATE:16000}
         tts-url: https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer
         tts-model: cosyvoice-v3-flash
         chinese-voice: longanyang

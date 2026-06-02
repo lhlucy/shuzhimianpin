@@ -48,6 +48,7 @@ public class SecurityConfig {
                 .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .antMatchers("/api/auth/**").permitAll()
                 .antMatchers("/api/public/**").permitAll()
+                .antMatchers("/ws/ai/asr/realtime").permitAll()
                 .antMatchers(HttpMethod.GET, "/api/questions/**").permitAll()
                 .antMatchers(HttpMethod.GET, "/api/banks/**").permitAll()
                 .antMatchers(HttpMethod.GET, "/api/job-roles/**").permitAll()
