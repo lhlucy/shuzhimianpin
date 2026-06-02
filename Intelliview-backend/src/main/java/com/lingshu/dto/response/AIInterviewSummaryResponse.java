@@ -84,6 +84,8 @@ public class AIInterviewSummaryResponse {
 
         private Integer confidenceLevel;
 
+        private Map<String, Object> expressionAnalysis;
+
         private String feedbackSummary;
 
         private Map<String, Double> dimensionScores;

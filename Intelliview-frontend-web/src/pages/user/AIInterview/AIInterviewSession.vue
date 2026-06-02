@@ -168,6 +168,9 @@
             <div :class="message.role === 'ai' ? 'bubble' : 'user-bubble'">
               <strong v-if="message.role === 'ai'">{{ message.title }}</strong>
               <p>{{ message.content }}</p>
+              <div v-if="message.role === 'user' && message.expressionAnalysis?.enabled" class="message-expression">
+                {{ formatExpressionLine(message.expressionAnalysis) }}
+              </div>
             </div>
             <span v-if="message.role === 'user'" class="user-avatar">我</span>
           </article>
@@ -196,21 +199,39 @@
               </div>
               <div class="voice-live-copy">
                 <strong>{{ recording ? '正在语音输入' : '正在整理语音内容' }}</strong>
-                <span>{{ recognitionSupported ? '识别内容会实时显示' : '当前浏览器不支持实时识别，停止后会自动转写' }}</span>
+                <span>{{ recognitionSupported ? '识别内容会实时显示，可在这里直接编辑' : '当前浏览器不支持实时识别，停止后会自动转写' }}</span>
               </div>
             </div>
-            <p>{{ voiceDisplayText }}</p>
+            <div class="voice-draft-row">
+              <el-input
+                v-model="voiceDraft"
+                type="textarea"
+                :autosize="{ minRows: 2, maxRows: 5 }"
+                placeholder="语音识别内容会显示在这里，你可以直接编辑..."
+                @input="markVoiceDraftEdited"
+              />
+              <button type="button" class="voice-finish-btn" :disabled="inputDisabled || !voiceDraft.trim()" @click="completeVoiceAnswer">
+                完成
+              </button>
+            </div>
           </div>
 
           <div class="input-bar">
-            <el-input v-model="draft" :disabled="inputDisabled" placeholder="输入你的回答，或点击麦克风语音输入..." @keyup.enter="submitAnswer" />
+            <el-input
+              v-model="draft"
+              type="textarea"
+              :autosize="{ minRows: 1, maxRows: 4 }"
+              :disabled="inputDisabled"
+              placeholder="输入你的回答，或点击麦克风语音输入..."
+              @keydown.enter.exact.prevent="submitAnswer"
+            />
             <button type="button" class="call-btn" :disabled="loadingSession" @click="openCallView">
               <el-icon><VideoCamera /></el-icon>
             </button>
             <button type="button" class="mic-btn" :class="{ active: recording }" :disabled="inputDisabled || transcribing" @click="toggleRecord">
               <el-icon><Microphone /></el-icon>
             </button>
-            <button type="button" class="send-btn" :disabled="inputDisabled || !draft.trim()" @click="submitAnswer">
+            <button type="button" class="send-btn" :disabled="inputDisabled || !draft.trim()" @click="submitAnswer()">
               <el-icon><Promotion /></el-icon>
             </button>
           </div>
@@ -308,6 +329,39 @@
             </article>
           </section>
 
+          <section class="expression-report-section">
+            <div class="section-head">
+              <h3>表达分析</h3>
+              <p>基于语音作答的转写文本、语速、情绪标签和表达稳定性生成。</p>
+            </div>
+            <div v-if="expressionReport.enabled" class="expression-report-grid">
+              <article>
+                <span>平均语速</span>
+                <strong>{{ expressionReport.averageSpeechRate }} 字/分钟</strong>
+                <p>{{ expressionReport.speechRateLevel }}</p>
+              </article>
+              <article>
+                <span>主要情绪</span>
+                <strong>{{ expressionReport.emotionLabel }}</strong>
+                <p>{{ expressionReport.voiceCount }} 道语音题</p>
+              </article>
+              <article>
+                <span>平均清晰度</span>
+                <strong>{{ expressionReport.averageClarity }}</strong>
+                <p>满分 100</p>
+              </article>
+              <article>
+                <span>平均自信度</span>
+                <strong>{{ expressionReport.averageConfidence }}</strong>
+                <p>满分 100</p>
+              </article>
+            </div>
+            <div v-else class="expression-empty">
+              <strong>本场主要采用文字作答</strong>
+              <p>未采集语音表达数据，暂无语速、语气情绪和语音自信度分析。</p>
+            </div>
+          </section>
+
           <section class="question-review-section">
             <div class="section-head">
               <h3>逐题复盘</h3>
@@ -329,6 +383,10 @@
               <div class="review-meta">
                 <span>作答时长：{{ formatDuration(review.duration || 0) }}</span>
                 <span>表达信心：{{ review.confidenceLevel || 0 }}/10</span>
+              </div>
+
+              <div v-if="review.expressionAnalysis" class="review-expression" :class="{ disabled: !review.expressionAnalysis.enabled }">
+                {{ formatExpressionLine(review.expressionAnalysis) }}
               </div>
 
               <div class="review-answer">
@@ -424,6 +482,9 @@
                   <div class="call-chat-bubble">
                     <strong v-if="message.role === 'ai'">{{ message.title }}</strong>
                     <p>{{ message.content }}</p>
+                    <div v-if="message.role === 'user' && message.expressionAnalysis?.enabled" class="message-expression">
+                      {{ formatExpressionLine(message.expressionAnalysis) }}
+                    </div>
                   </div>
                 </article>
 
@@ -473,18 +534,36 @@
                 </div>
                 <div class="voice-live-copy">
                   <strong>{{ recording ? '正在语音输入' : '正在整理语音内容' }}</strong>
-                  <span>{{ recognitionSupported ? '识别内容会实时显示' : '当前浏览器不支持实时识别，停止后会自动转写' }}</span>
+                  <span>{{ recognitionSupported ? '识别内容会实时显示，可在这里直接编辑' : '当前浏览器不支持实时识别，停止后会自动转写' }}</span>
                 </div>
               </div>
-              <p>{{ voiceDisplayText }}</p>
+              <div class="voice-draft-row">
+                <el-input
+                  v-model="voiceDraft"
+                  type="textarea"
+                  :autosize="{ minRows: 2, maxRows: 5 }"
+                  placeholder="语音识别内容会显示在这里，你可以直接编辑..."
+                  @input="markVoiceDraftEdited"
+                />
+                <button type="button" class="voice-finish-btn" :disabled="inputDisabled || !voiceDraft.trim()" @click="completeVoiceAnswer">
+                  完成
+                </button>
+              </div>
             </div>
 
             <div class="input-bar call-input-bar">
-              <el-input v-model="draft" :disabled="inputDisabled" placeholder="输入你的回答，或点击麦克风语音输入..." @keyup.enter="submitAnswer" />
+              <el-input
+                v-model="draft"
+                type="textarea"
+                :autosize="{ minRows: 1, maxRows: 4 }"
+                :disabled="inputDisabled"
+                placeholder="输入你的回答，或点击麦克风语音输入..."
+                @keydown.enter.exact.prevent="submitAnswer"
+              />
               <button type="button" class="mic-btn" :class="{ active: recording }" :disabled="inputDisabled || transcribing" @click="toggleRecord">
                 <el-icon><Microphone /></el-icon>
               </button>
-              <button type="button" class="send-btn" :disabled="inputDisabled || !draft.trim()" @click="submitAnswer">
+              <button type="button" class="send-btn" :disabled="inputDisabled || !draft.trim()" @click="submitAnswer()">
                 <el-icon><Promotion /></el-icon>
               </button>
             </div>
@@ -521,6 +600,7 @@ import { GridComponent, RadarComponent, TooltipComponent } from 'echarts/compone
 import { CanvasRenderer } from 'echarts/renderers'
 import aiInterviewApi, {
   type AIInterviewAvatarSession,
+  type AIInterviewExpressionAnalysis,
   type AIInterviewQuestion,
   type AIInterviewSession,
   type AIInterviewSummary
@@ -536,6 +616,7 @@ interface ChatMessage {
   role: 'ai' | 'user'
   title?: string
   content: string
+  expressionAnalysis?: AIInterviewExpressionAnalysis
 }
 
 interface DimensionItem {
@@ -601,6 +682,10 @@ const recording = ref(false)
 const transcribing = ref(false)
 const liveTranscript = ref('')
 const interimTranscript = ref('')
+const voiceDraft = ref('')
+const voiceFinalTranscript = ref('')
+const voicePartialTranscript = ref('')
+const voiceDraftEdited = ref(false)
 const avatarLoading = ref(false)
 const avatarSpeaking = ref(false)
 const avatarError = ref('')
@@ -627,6 +712,7 @@ let audioProcessor: ScriptProcessorNode | null = null
 const cameraStream = ref<MediaStream | null>(null)
 let voiceAnswerStartedAt = 0
 let voiceTranscriptBase = ''
+let voiceCompleting = false
 let avatarClosingPromise: Promise<void> | null = null
 let radarChart: echarts.ECharts | null = null
 let scoringModelChart: echarts.ECharts | null = null
@@ -634,7 +720,6 @@ let pageExitHandled = false
 const cameraError = ref('')
 const voiceError = ref('')
 const realtimeEmotion = ref('')
-const lastAnswerInputMode = ref<'TEXT' | 'VOICE'>('TEXT')
 
 const REALTIME_ASR_SAMPLE_RATE = 16000
 
@@ -690,12 +775,6 @@ const recognitionSupported = computed(() => {
   if (typeof window === 'undefined') return false
   return Boolean(window.WebSocket && typeof navigator.mediaDevices?.getUserMedia === 'function' && ((window as any).AudioContext || (window as any).webkitAudioContext))
 })
-const voiceDisplayText = computed(() => {
-  const merged = [liveTranscript.value, interimTranscript.value].filter(Boolean).join('').trim()
-  if (merged) return merged
-  return recording.value ? '正在聆听，请开始说话...' : '语音已结束，正在生成文字...'
-})
-
 const GROWTH_CURVE_STORAGE_KEY = 'growth_curve_interview_ids'
 const INTERVIEW_TIMER_PREFIX = 'ai_interview_started_at_'
 const getTimerStorageKey = () => `${INTERVIEW_TIMER_PREFIX}${interviewId.value}`
@@ -1230,12 +1309,57 @@ const scrollToBottom = async () => {
 }
 
 const pushMessage = (role: 'ai' | 'user', content: string, title = role === 'ai' ? '面试官' : '') => {
-  messages.value.push({ id: `${Date.now()}-${messages.value.length}`, role, title, content })
+  const message: ChatMessage = { id: `${Date.now()}-${messages.value.length}`, role, title, content }
+  messages.value.push(message)
   if (role === 'ai') {
     enqueueAvatarSpeech(content)
   }
   scrollToBottom()
+  return message
 }
+
+const formatExpressionLine = (analysis?: AIInterviewExpressionAnalysis) => {
+  if (!analysis) return ''
+  if (!analysis.enabled) {
+    return analysis.reason || '文字作答｜未采集语音表达数据'
+  }
+  return `表达分析：语速 ${Math.round(analysis.speechRate || 0)} 字/分钟｜情绪 ${analysis.emotionLabel || '未识别'}｜清晰度 ${Math.round(analysis.clarityScore || 0)}｜自信度 ${Math.round(analysis.confidenceScore || 0)}`
+}
+
+const expressionReport = computed(() => {
+  const analyses = (summary.value?.questionReviews || [])
+    .map((review) => review.expressionAnalysis)
+    .filter((item): item is AIInterviewExpressionAnalysis => Boolean(item?.enabled))
+  if (!analyses.length) {
+    return {
+      enabled: false,
+      voiceCount: 0,
+      averageSpeechRate: 0,
+      speechRateLevel: '暂无',
+      emotionLabel: '暂无',
+      averageClarity: 0,
+      averageConfidence: 0
+    }
+  }
+  const averageSpeechRate = Math.round(analyses.reduce((sum, item) => sum + Number(item.speechRate || 0), 0) / analyses.length)
+  const averageClarity = Math.round(analyses.reduce((sum, item) => sum + Number(item.clarityScore || 0), 0) / analyses.length)
+  const averageConfidence = Math.round(analyses.reduce((sum, item) => sum + Number(item.confidenceScore || 0), 0) / analyses.length)
+  const emotionCounts = analyses.reduce<Record<string, number>>((acc, item) => {
+    const label = item.emotionLabel || '未识别'
+    acc[label] = (acc[label] || 0) + 1
+    return acc
+  }, {})
+  const emotionLabel = Object.entries(emotionCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '未识别'
+  return {
+    enabled: true,
+    voiceCount: analyses.length,
+    averageSpeechRate,
+    speechRateLevel: averageSpeechRate < 110 ? '整体偏慢' : averageSpeechRate <= 230 ? '整体适中' : averageSpeechRate <= 270 ? '整体稍快' : '整体过快',
+    emotionLabel,
+    averageClarity,
+    averageConfidence
+  }
+})
 
 const enqueueAvatarSpeech = (content: string) => {
   const text = content.trim()
@@ -1407,20 +1531,29 @@ const loadResumes = async () => {
   }
 }
 
-const submitAnswer = async () => {
-  const content = draft.value.trim()
+const submitAnswer = async (override?: { content: string; inputMode?: 'TEXT' | 'VOICE'; durationSeconds?: number; emotion?: string }) => {
+  const content = (override?.content ?? draft.value).trim()
   if (!content || !currentQuestion.value || !session.value) return
   const questionId = currentQuestion.value.questionId
-  draft.value = ''
-  pushMessage('user', content)
+  if (!override) {
+    draft.value = ''
+  }
+  const inputMode = override?.inputMode || 'TEXT'
+  const durationSeconds = override?.durationSeconds ?? (voiceAnswerStartedAt > 0 ? Math.max(1, Math.round((Date.now() - voiceAnswerStartedAt) / 1000)) : elapsedSeconds.value)
+  const userMessage = pushMessage('user', content)
   waitingAI.value = true
   try {
     const result = await aiInterviewApi.submitAnswer(session.value.interviewId, questionId, {
       content,
-      inputMode: lastAnswerInputMode.value,
-      duration: voiceAnswerStartedAt > 0 ? Math.max(1, Math.round((Date.now() - voiceAnswerStartedAt) / 1000)) : elapsedSeconds.value
+      inputMode,
+      duration: durationSeconds,
+      expressionMeta: {
+        emotion: override?.emotion || realtimeEmotion.value,
+        transcriptText: content,
+        durationSeconds
+      }
     })
-    lastAnswerInputMode.value = 'TEXT'
+    userMessage.expressionAnalysis = result.expressionAnalysis
     voiceAnswerStartedAt = 0
     if (result.interviewerReply) {
       pushMessage('ai', result.interviewerReply)
@@ -1566,13 +1699,6 @@ const closeCallView = () => {
   router.replace({ path: route.path, query: nextQuery }).catch(() => undefined)
 }
 
-const syncDraftWithTranscript = () => {
-  const merged = [liveTranscript.value, interimTranscript.value].filter(Boolean).join('').trim()
-  if (merged) {
-    draft.value = merged
-  }
-}
-
 const buildRealtimeAsrLanguage = () => {
   const language = (session.value?.interviewLanguage || '').toLowerCase()
   return language.startsWith('en') || language.includes('english') || language.includes('英文') ? 'en' : 'zh'
@@ -1587,6 +1713,16 @@ const buildRealtimeAsrUrl = () => {
   base.searchParams.set('token', token)
   base.searchParams.set('language', buildRealtimeAsrLanguage())
   return base.toString()
+}
+
+const markVoiceDraftEdited = () => {
+  voiceDraftEdited.value = true
+}
+
+const updateVoiceDraftFromRecognition = (text: string) => {
+  if (!voiceDraftEdited.value) {
+    voiceDraft.value = text.trim()
+  }
 }
 
 const connectRealtimeAsr = () => new Promise<void>((resolve, reject) => {
@@ -1613,14 +1749,17 @@ const connectRealtimeAsr = () => new Promise<void>((resolve, reject) => {
     try {
       const payload = JSON.parse(String(event.data))
       if (payload.type === 'partial') {
-        interimTranscript.value = String(payload.displayText || `${payload.text || ''}${payload.stash || ''}`).trim()
+        voicePartialTranscript.value = String(payload.displayText || `${payload.text || ''}${payload.stash || ''}`).trim()
+        interimTranscript.value = voicePartialTranscript.value
+        updateVoiceDraftFromRecognition([voiceTranscriptBase, voiceFinalTranscript.value, voicePartialTranscript.value].filter(Boolean).join(''))
         realtimeEmotion.value = payload.emotion || realtimeEmotion.value
-        syncDraftWithTranscript()
       } else if (payload.type === 'final') {
         const transcript = String(payload.transcript || '').trim()
         if (transcript) {
-          liveTranscript.value = [voiceTranscriptBase, transcript].filter(Boolean).join('')
-          draft.value = liveTranscript.value
+          voiceFinalTranscript.value = [voiceFinalTranscript.value, transcript].filter(Boolean).join('')
+          voicePartialTranscript.value = ''
+          liveTranscript.value = [voiceTranscriptBase, voiceFinalTranscript.value].filter(Boolean).join('')
+          updateVoiceDraftFromRecognition(liveTranscript.value)
         }
         realtimeEmotion.value = payload.emotion || realtimeEmotion.value
         interimTranscript.value = ''
@@ -1722,11 +1861,14 @@ const startVoiceCapture = async (silent = false) => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     voiceStream = stream
     audioChunks = []
-    voiceTranscriptBase = draft.value.trim()
+    voiceTranscriptBase = ''
+    voiceFinalTranscript.value = ''
+    voicePartialTranscript.value = ''
+    voiceDraftEdited.value = false
+    voiceDraft.value = ''
     liveTranscript.value = voiceTranscriptBase
     interimTranscript.value = ''
     realtimeEmotion.value = ''
-    lastAnswerInputMode.value = 'VOICE'
     voiceAnswerStartedAt = Date.now()
     await connectRealtimeAsr()
     await startPcmStreaming(stream)
@@ -1739,10 +1881,15 @@ const startVoiceCapture = async (silent = false) => {
       if (voiceStream === stream) {
         voiceStream = null
       }
+      if (voiceCompleting) {
+        interimTranscript.value = ''
+        transcribing.value = false
+        return
+      }
       const realtimeText = [liveTranscript.value, interimTranscript.value].filter(Boolean).join('').trim()
       if (realtimeText && realtimeText !== voiceTranscriptBase) {
         liveTranscript.value = realtimeText
-        draft.value = realtimeText
+        updateVoiceDraftFromRecognition(realtimeText)
         interimTranscript.value = ''
         transcribing.value = false
         return
@@ -1755,7 +1902,7 @@ const startVoiceCapture = async (silent = false) => {
         const transcript = (result.transcript || '').trim()
         if (transcript) {
           liveTranscript.value = transcript
-          draft.value = transcript
+          updateVoiceDraftFromRecognition(transcript)
         }
       } catch (error: any) {
         ElMessage.error(error?.message || '语音识别失败')
@@ -1784,6 +1931,40 @@ const toggleRecord = async () => {
     return
   }
   await startVoiceCapture()
+}
+
+const completeVoiceAnswer = async () => {
+  const content = voiceDraft.value.trim()
+  if (!content || inputDisabled.value || !currentQuestion.value || !session.value) return
+  const durationSeconds = voiceAnswerStartedAt > 0 ? Math.max(1, Math.round((Date.now() - voiceAnswerStartedAt) / 1000)) : 0
+  const wasRecording = recording.value
+  voiceCompleting = true
+  if (wasRecording) {
+    stopVoiceCapture()
+  }
+  const emotion = realtimeEmotion.value
+  voiceDraft.value = ''
+  voiceFinalTranscript.value = ''
+  voicePartialTranscript.value = ''
+  voiceDraftEdited.value = false
+  liveTranscript.value = ''
+  interimTranscript.value = ''
+  try {
+    await submitAnswer({
+      content,
+      inputMode: 'VOICE',
+      durationSeconds,
+      emotion
+    })
+  } finally {
+    if (wasRecording) {
+      window.setTimeout(() => {
+        voiceCompleting = false
+      }, 1200)
+    } else {
+      voiceCompleting = false
+    }
+  }
 }
 
 watch(
@@ -2719,6 +2900,23 @@ onUnmounted(() => {
   white-space: pre-wrap;
 }
 
+.message-expression {
+  margin-top: 10px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 12px;
+  line-height: 1.6;
+  font-weight: 800;
+}
+
+.message-expression.disabled {
+  color: rgba(255, 255, 255, 0.74);
+  background: rgba(255, 255, 255, 0.1);
+  font-weight: 700;
+}
+
 .user-bubble {
   max-width: 520px;
   padding: 12px 18px;
@@ -2808,14 +3006,6 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
-.voice-live-card p {
-  margin-top: 10px;
-  color: var(--primary-text);
-  line-height: 1.7;
-  font-size: 13px;
-  white-space: pre-wrap;
-}
-
 .voice-wave {
   width: 44px;
   height: 28px;
@@ -2849,22 +3039,62 @@ onUnmounted(() => {
   animation-delay: 0.36s;
 }
 
+.voice-draft-row {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px;
+  align-items: stretch;
+  gap: 10px;
+}
+
+:deep(.voice-draft-row .el-textarea__inner) {
+  min-height: 72px !important;
+  border-radius: 9px;
+  color: var(--primary-text);
+  background: var(--input-bg);
+  border-color: var(--input-border);
+  box-shadow: none;
+  line-height: 1.65;
+  resize: none;
+}
+
+.voice-finish-btn {
+  min-height: 72px;
+  border: none;
+  border-radius: 9px;
+  color: #ffffff;
+  background: var(--accent);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.voice-finish-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.voice-finish-btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
 .input-bar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 38px 38px 38px;
-  align-items: center;
+  align-items: end;
   gap: 8px;
 }
 
-:deep(.input-bar .el-input__wrapper) {
-  height: 44px;
+:deep(.input-bar .el-textarea__inner) {
+  min-height: 42px !important;
   border-radius: 9px;
-  background: var(--input-bg);
-  box-shadow: inset 0 0 0 1px var(--input-border);
-}
-
-:deep(.input-bar .el-input__inner) {
   color: var(--primary-text);
+  background: var(--input-bg);
+  border-color: var(--input-border);
+  box-shadow: none;
+  line-height: 1.55;
+  resize: none;
 }
 
 .call-btn,
@@ -3373,6 +3603,69 @@ onUnmounted(() => {
   font-weight: 800;
 }
 
+.expression-report-section {
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+  border: 1px solid var(--report-card-border);
+  border-radius: 16px;
+  background: var(--report-card-bg);
+  box-shadow: var(--report-shadow);
+}
+
+.expression-report-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.expression-report-grid article {
+  min-height: 104px;
+  padding: 16px;
+  display: grid;
+  align-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--report-card-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--report-muted-bg) 76%, var(--panel-bg) 24%);
+}
+
+.expression-report-grid span,
+.expression-empty p {
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
+.expression-report-grid strong {
+  color: var(--primary-text);
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.expression-report-grid p {
+  color: var(--report-text);
+  font-size: 13px;
+}
+
+.expression-empty {
+  padding: 16px;
+  display: grid;
+  gap: 6px;
+  border: 1px dashed var(--report-card-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--report-muted-bg) 72%, transparent 28%);
+}
+
+.expression-empty strong {
+  color: var(--primary-text);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.expression-empty p {
+  line-height: 1.7;
+}
+
 .growth-join-card {
   padding: 18px 20px;
   display: flex;
@@ -3598,6 +3891,26 @@ onUnmounted(() => {
   gap: 8px 14px;
 }
 
+.review-expression {
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 90, 42, 0.18);
+  border-radius: 9px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 12px;
+  line-height: 1.65;
+  font-weight: 900;
+}
+
+.review-expression.disabled {
+  color: var(--muted-text);
+  background: var(--report-muted-bg);
+  border-color: var(--report-card-border);
+  font-weight: 700;
+}
+
 .review-answer {
   display: grid;
   gap: 8px;
@@ -3812,6 +4125,7 @@ onUnmounted(() => {
   .report-hero,
   .report-meta-row,
   .growth-join-card,
+  .expression-report-grid,
   .dimension-panel,
   .scoring-model-legend,
   .report-section-grid,
@@ -3822,6 +4136,14 @@ onUnmounted(() => {
 
   .review-top {
     flex-direction: column;
+  }
+
+  .voice-draft-row {
+    grid-template-columns: 1fr;
+  }
+
+  .voice-finish-btn {
+    min-height: 40px;
   }
 }
 </style>

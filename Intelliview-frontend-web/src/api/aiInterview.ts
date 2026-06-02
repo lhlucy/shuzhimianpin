@@ -78,6 +78,28 @@ export interface AIInterviewAnswerPayload {
   content: string
   inputMode?: string
   duration?: number
+  expressionMeta?: {
+    emotion?: string
+    transcriptText?: string
+    durationSeconds?: number
+    raw?: Record<string, any>
+  }
+}
+
+export interface AIInterviewExpressionAnalysis {
+  enabled?: boolean
+  source?: 'VOICE' | 'TEXT' | string
+  reason?: string
+  durationSeconds?: number
+  emotionLabel?: string
+  emotionCode?: string
+  speechRate?: number
+  speechRateLevel?: string
+  clarityScore?: number
+  confidenceScore?: number
+  fillerCount?: number
+  repeatedCount?: number
+  suggestions?: string[]
 }
 
 export interface AIInterviewAnswerResult {
@@ -86,6 +108,7 @@ export interface AIInterviewAnswerResult {
   interviewerReply: string
   score: number
   dimensionScores?: Record<string, number>
+  expressionAnalysis?: AIInterviewExpressionAnalysis
   interviewCompleted: boolean
   summaryReady: boolean
   questionCount?: number
@@ -168,6 +191,7 @@ export interface AIInterviewSummary {
     dimensionScores?: Record<string, number>
     duration?: number
     confidenceLevel?: number
+    expressionAnalysis?: AIInterviewExpressionAnalysis
     feedbackSummary?: string
     strengths?: string[]
     weaknesses?: string[]

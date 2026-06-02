@@ -272,6 +272,9 @@ public class AIInterviewServiceImpl implements AIInterviewService {
 
         AnswerEvaluation evaluation = evaluateAnswerWithAI(interview, question, request.getContent());
         LocalDateTime now = LocalDateTime.now();
+        String inputMode = StringUtils.hasText(request.getInputMode()) ? request.getInputMode().trim().toUpperCase(Locale.ROOT) : "TEXT";
+        int answerDuration = request.getDuration() == null ? 0 : Math.max(request.getDuration(), 0);
+        Map<String, Object> expressionAnalysis = buildExpressionAnalysis(request, inputMode, answerDuration, evaluation);
 
         AIInterviewAnswer answer = new AIInterviewAnswer();
         answer.setInterviewId(interviewId);
@@ -279,8 +282,8 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         answer.setContent(request.getContent().trim());
         answer.setTranscriptText(request.getContent().trim());
         answer.setAnswerText(request.getContent().trim());
-        answer.setInputMode(StringUtils.hasText(request.getInputMode()) ? request.getInputMode().trim().toUpperCase(Locale.ROOT) : "TEXT");
-        answer.setDuration(request.getDuration() == null ? 0 : Math.max(request.getDuration(), 0));
+        answer.setInputMode(inputMode);
+        answer.setDuration(answerDuration);
         answer.setConfidenceLevel(evaluation.confidenceLevel);
         answer.setScore(evaluation.score);
         answer.setFeedback(writeJsonSilently(Map.of(
@@ -294,10 +297,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 "hitKeywords", evaluation.hitKeywords,
                 "missingKeywords", evaluation.missingKeywords
         )));
-        answer.setExpressionAnalysis(writeJsonSilently(Map.of(
-                "duration", answer.getDuration(),
-                "inputMode", answer.getInputMode()
-        )));
+        answer.setExpressionAnalysis(writeJsonSilently(expressionAnalysis));
         answer.setSubmittedAt(now);
         answer.setCreatedAt(now);
         aiInterviewAnswerMapper.insert(answer);
@@ -325,6 +325,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 .interviewerReply(interviewerReply)
                 .score(evaluation.score)
                 .dimensionScores(evaluation.dimensionScores)
+                .expressionAnalysis(expressionAnalysis)
                 .interviewCompleted(completed)
                 .summaryReady(completed)
                 .questionCount(safeInt(interview.getQuestionCount()))
@@ -365,6 +366,183 @@ public class AIInterviewServiceImpl implements AIInterviewService {
             log.warn("AI answer evaluation failed. interviewId={}", interview.getId(), ex);
             throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "AI 面试官判断失败，请稍后重试");
         }
+    }
+
+    private Map<String, Object> buildExpressionAnalysis(AIInterviewAnswerRequest request, String inputMode,
+                                                        int durationSeconds, AnswerEvaluation evaluation) {
+        Map<String, Object> analysis = new LinkedHashMap<>();
+        analysis.put("source", inputMode);
+        analysis.put("durationSeconds", durationSeconds);
+        if (!"VOICE".equalsIgnoreCase(inputMode)) {
+            analysis.put("enabled", false);
+            analysis.put("reason", "本题为文字输入，未采集语音表达数据");
+            return analysis;
+        }
+
+        String transcript = request.getExpressionMeta() != null && StringUtils.hasText(request.getExpressionMeta().getTranscriptText())
+                ? request.getExpressionMeta().getTranscriptText()
+                : request.getContent();
+        String emotion = request.getExpressionMeta() == null ? "" : blankToEmpty(request.getExpressionMeta().getEmotion());
+        int effectiveDuration = request.getExpressionMeta() != null && request.getExpressionMeta().getDurationSeconds() != null
+                ? Math.max(0, request.getExpressionMeta().getDurationSeconds())
+                : durationSeconds;
+        int speechUnits = countSpeechUnits(transcript);
+        int speechRate = effectiveDuration <= 0 ? 0 : (int) Math.round(speechUnits * 60.0 / effectiveDuration);
+        int fillerCount = countFillers(transcript);
+        int repeatedCount = countRepeatedPhrases(transcript);
+        double speechRateScore = calculateSpeechRateScore(speechRate);
+        double clarityScore = calculateClarityScore(transcript, fillerCount, repeatedCount, evaluation);
+        double emotionScore = calculateEmotionScore(emotion);
+        double confidenceScore = clampScore(emotionScore * 0.35 + speechRateScore * 0.25 + clarityScore * 0.25 + evaluation.score * 0.15);
+
+        analysis.put("enabled", true);
+        analysis.put("emotionLabel", normalizeEmotionLabel(emotion));
+        analysis.put("emotionCode", emotion);
+        analysis.put("speechRate", speechRate);
+        analysis.put("speechRateLevel", speechRateLevel(speechRate));
+        analysis.put("clarityScore", roundToOneDecimal(clarityScore));
+        analysis.put("confidenceScore", roundToOneDecimal(confidenceScore));
+        analysis.put("fillerCount", fillerCount);
+        analysis.put("repeatedCount", repeatedCount);
+        analysis.put("suggestions", buildExpressionSuggestions(speechRate, fillerCount, repeatedCount, clarityScore, confidenceScore));
+        return analysis;
+    }
+
+    private int countSpeechUnits(String text) {
+        String normalized = blankToEmpty(text);
+        if (!StringUtils.hasText(normalized)) {
+            return 0;
+        }
+        long chineseChars = normalized.codePoints()
+                .filter(codePoint -> Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HAN)
+                .count();
+        String latinText = normalized.replaceAll("\\p{IsHan}", " ");
+        long words = Arrays.stream(latinText.split("[^A-Za-z0-9]+"))
+                .filter(StringUtils::hasText)
+                .count();
+        long nonChineseVisible = normalized.codePoints()
+                .filter(codePoint -> Character.UnicodeScript.of(codePoint) != Character.UnicodeScript.HAN)
+                .filter(codePoint -> !Character.isWhitespace(codePoint))
+                .filter(codePoint -> !Character.isLetterOrDigit(codePoint))
+                .count();
+        return (int) Math.max(0, chineseChars + words + nonChineseVisible);
+    }
+
+    private int countFillers(String text) {
+        String normalized = blankToEmpty(text).replaceAll("\\s+", "");
+        if (!StringUtils.hasText(normalized)) {
+            return 0;
+        }
+        List<String> fillers = List.of("嗯", "呃", "额", "啊", "那个", "这个", "然后然后", "就是就是", "怎么说");
+        int count = 0;
+        for (String filler : fillers) {
+            int index = 0;
+            while ((index = normalized.indexOf(filler, index)) >= 0) {
+                count++;
+                index += filler.length();
+            }
+        }
+        return count;
+    }
+
+    private int countRepeatedPhrases(String text) {
+        String normalized = blankToEmpty(text).replaceAll("\\s+", "");
+        int repeated = 0;
+        for (int index = 0; index + 4 <= normalized.length(); index += 2) {
+            String phrase = normalized.substring(index, index + 2);
+            if (index + 4 <= normalized.length() && phrase.equals(normalized.substring(index + 2, index + 4))) {
+                repeated++;
+            }
+        }
+        return repeated;
+    }
+
+    private double calculateSpeechRateScore(int speechRate) {
+        if (speechRate <= 0) {
+            return 60.0;
+        }
+        if (speechRate >= 140 && speechRate <= 230) {
+            return 90.0;
+        }
+        if ((speechRate >= 110 && speechRate < 140) || (speechRate > 230 && speechRate <= 270)) {
+            return 78.0;
+        }
+        return 65.0;
+    }
+
+    private double calculateClarityScore(String transcript, int fillerCount, int repeatedCount, AnswerEvaluation evaluation) {
+        int speechUnits = countSpeechUnits(transcript);
+        double base = evaluation.dimensionScores == null ? evaluation.score
+                : evaluation.dimensionScores.getOrDefault(AIInterviewDimensionModel.COMMUNICATION_CLARITY, evaluation.score);
+        double penalty = Math.min(22.0, fillerCount * 3.0 + repeatedCount * 2.5);
+        if (speechUnits < 30) {
+            penalty += 8.0;
+        }
+        return clampScore(base - penalty + (speechUnits >= 80 ? 4.0 : 0.0));
+    }
+
+    private double calculateEmotionScore(String emotion) {
+        String normalized = blankToEmpty(emotion).toLowerCase(Locale.ROOT);
+        if (!StringUtils.hasText(normalized)) {
+            return 76.0;
+        }
+        if (normalized.contains("happy") || normalized.contains("positive") || normalized.contains("calm")
+                || normalized.contains("neutral")) {
+            return 86.0;
+        }
+        if (normalized.contains("sad") || normalized.contains("angry") || normalized.contains("fear")
+                || normalized.contains("negative") || normalized.contains("nervous")) {
+            return 66.0;
+        }
+        return 76.0;
+    }
+
+    private String normalizeEmotionLabel(String emotion) {
+        String normalized = blankToEmpty(emotion).toLowerCase(Locale.ROOT);
+        if (!StringUtils.hasText(normalized)) {
+            return "未识别";
+        }
+        if (normalized.contains("neutral")) return "平稳";
+        if (normalized.contains("happy") || normalized.contains("positive")) return "积极";
+        if (normalized.contains("calm")) return "沉稳";
+        if (normalized.contains("nervous") || normalized.contains("fear")) return "紧张";
+        if (normalized.contains("sad") || normalized.contains("negative")) return "低落";
+        if (normalized.contains("angry")) return "急躁";
+        return emotion;
+    }
+
+    private String speechRateLevel(int speechRate) {
+        if (speechRate <= 0) return "未计算";
+        if (speechRate < 110) return "偏慢";
+        if (speechRate <= 230) return "适中";
+        if (speechRate <= 270) return "稍快";
+        return "过快";
+    }
+
+    private List<String> buildExpressionSuggestions(int speechRate, int fillerCount, int repeatedCount,
+                                                    double clarityScore, double confidenceScore) {
+        List<String> suggestions = new ArrayList<>();
+        if (speechRate > 270) {
+            suggestions.add("语速偏快，建议关键结论后短暂停顿，给面试官留出理解时间。");
+        } else if (speechRate > 0 && speechRate < 110) {
+            suggestions.add("语速偏慢，建议先列出回答框架，再展开关键细节。");
+        }
+        if (fillerCount >= 3) {
+            suggestions.add("口头禅较多，可用“第一、第二、最后”替代临场停顿。");
+        }
+        if (repeatedCount >= 2) {
+            suggestions.add("存在重复表达，建议减少回环叙述，突出结论和证据。");
+        }
+        if (clarityScore < 70) {
+            suggestions.add("表达清晰度还有提升空间，建议按“结论-原因-例子”组织回答。");
+        }
+        if (confidenceScore < 70) {
+            suggestions.add("表达自信度偏弱，建议减少犹豫词，回答开头先给明确判断。");
+        }
+        if (suggestions.isEmpty()) {
+            suggestions.add("表达节奏和清晰度较稳定，可继续保持结构化作答。");
+        }
+        return suggestions;
     }
 
     private String buildAnswerEvaluationPrompt(AIInterview interview, AIInterviewQuestion question, String answerText) {
@@ -1070,6 +1248,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
     private AIInterviewSummaryResponse.AIInterviewQuestionReview toQuestionReview(AIInterviewAnswer answer, AIInterviewQuestion question) {
         Map<String, Object> feedback = readJsonObject(answer.getFeedback());
         Map<String, Object> keywordAnalysis = readJsonObject(answer.getKeywordAnalysis());
+        Map<String, Object> expressionAnalysis = readJsonObject(answer.getExpressionAnalysis());
         return AIInterviewSummaryResponse.AIInterviewQuestionReview.builder()
                 .questionId(question == null ? answer.getQuestionId() : question.getId())
                 .questionOrder(question == null ? null : question.getQuestionOrder())
@@ -1079,6 +1258,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 .score(answer.getScore() == null ? 0.0 : roundToOneDecimal(answer.getScore()))
                 .duration(safeInt(answer.getDuration()))
                 .confidenceLevel(answer.getConfidenceLevel())
+                .expressionAnalysis(expressionAnalysis)
                 .feedbackSummary(readObjectText(feedback.get("summary")))
                 .dimensionScores(AIInterviewDimensionModel.parseDimensionScores(feedback.get("dimensionScores"),
                         answer.getScore() == null ? 0.0 : answer.getScore()))

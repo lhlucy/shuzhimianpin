@@ -19,6 +19,8 @@ public class AIInterviewAnswerResponse {
 
     private Map<String, Double> dimensionScores;
 
+    private Map<String, Object> expressionAnalysis;
+
     private boolean interviewCompleted;
 
     private boolean summaryReady;
