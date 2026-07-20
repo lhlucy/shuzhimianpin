@@ -12,6 +12,7 @@ import com.lingshu.util.RandomUtil;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -43,6 +44,9 @@ public class AuthController {
     private final EmailService emailService;
     private final GithubAuthService githubAuthService;
     private final UserService userService;
+
+    @Value("${app.captcha.enabled:true}")
+    private boolean captchaEnabled;
 
     /**
      * 获取验证码
@@ -148,7 +152,7 @@ public class AuthController {
         HttpServletRequest httpRequest) {
 
         try {
-            if (!captchaService.validateCaptcha(request.getCaptchaKey(), request.getCaptchaCode())) {
+            if (captchaEnabled && !captchaService.validateCaptcha(request.getCaptchaKey(), request.getCaptchaCode())) {
                 return ResponseEntity.badRequest()
                         .body(ApiResponse.error("图形验证码错误或已过期"));
             }

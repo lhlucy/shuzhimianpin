@@ -57,6 +57,8 @@ Intelliview-backend/logs/
 
 # Generated presentation and image intermediates
 outputs/
+output/
+tmp/
 image_to_ppt_runs/
 PPT页面预览图*/
 PPT页面预览图_image2/

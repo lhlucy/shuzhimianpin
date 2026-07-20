@@ -94,6 +94,7 @@ app:
     expiration: 86400000
     refresh-expiration: 604800000
   captcha:
+    enabled: ${CAPTCHA_ENABLED:true}
     expire-seconds: 300
   verification:
     email-expire-minutes: 10
