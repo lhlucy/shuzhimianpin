@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm --prefix Intelliview-frontend-web ci",
+  "buildCommand": "npm --prefix Intelliview-frontend-web run build",
+  "outputDirectory": "Intelliview-frontend-web/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
